@@ -55,25 +55,18 @@ async def process_template(
 
     # Process each image (example for image1)
     if image1_url:
-        response = requests.get(image1_url)
-        if response.status_code != 200:
-            raise HTTPException(status_code=400, detail=f"URL {image1_url} is not valid")
+        template = process_image(image1_url, template, image1_x, image1_y, image1_w)
+    if image2_url:
+        template = process_image(image2_url, template, image2_x, image2_y, image2_w)
+    if image3_url:
+        template = process_image(image3_url, template, image3_x, image3_y, image3_w)
+    if image4_url:
+        template = process_image(image4_url, template, image4_x, image4_y, image4_w)
 
-        try:
-            image1 = Image.open(BytesIO(response.content))
-        except IOError:
-            raise HTTPException(status_code=400, detail="Invalid image format")
+    # Save or respond with the processed image
+    img_byte_arr = BytesIO()
+    template.save(img_byte_arr, format='PNG')  # Sauvegarde l'image traitée dans un buffer en mémoire
+    img_byte_arr = img_byte_arr.getvalue()
 
-        # Resize and place the image on the template
-        image1 = image1.resize((image1_w, int(image1_w * image1.height / image1.width)))
-        template.paste(image1, (image1_x, image1_y))
-
-        # Add similar blocks for other images (image2, image3, etc.)
-
-        # Save or respond with the processed image
-        img_byte_arr = BytesIO()
-        template.save(img_byte_arr, format='PNG')  # Sauvegarde l'image traitée dans un buffer en mémoire
-        img_byte_arr = img_byte_arr.getvalue()
-
-        return StreamingResponse(BytesIO(img_byte_arr), media_type="image/png")
+    return StreamingResponse(BytesIO(img_byte_arr), media_type="image/png")
 
