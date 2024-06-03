@@ -139,6 +139,7 @@ def add_text(
     color: str = "black",
     align: Optional[str] = "left"
 ) -> Image:
+    
     font_path = ''
     if font_name == "arial":
         font_path = "/usr/share/fonts/arial.ttf"
@@ -176,24 +177,24 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
         for i, _ in enumerate(xs):
             try:
                 rotation = rs[i] if i < len(rs) else 0
-                image = apply_rotation(image, rotation)
+                new_image = apply_rotation(image, rotation)
                 
                 top = dhs[i] if i < len(dhs) else 0
                 bottom = dbs[i] if i < len(dbs) else 0
-                image = apply_crop(image, top, bottom)
+                new_image = apply_crop(new_image, top, bottom)
                 
                 filter_ = cs[i] if i < len(cs) else None
-                image = apply_filter(image, filter_)
+                new_image = apply_filter(new_image, filter_)
                 
-                new_width = int((ws[i] / 100) * image.width) if i < len(ws) else image.width
-                new_height = int(new_width * image.height / image.width)
-                image = image.resize((new_width, new_height))
+                new_width = int((ws[i] / 100) * new_image.width) if i < len(ws) else new_image.width
+                new_height = int(new_width * new_image.height / new_image.width)
+                new_image = new_image.resize((new_width, new_height))
 
                 
 
                 
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
-                y = int(template.height - (ys[i] / 100 * template.height) - image.height) if i < len(ys) else 0
+                y = int(template.height - (ys[i] / 100 * template.height) - new_image.height) if i < len(ys) else 0
                 template.paste(image, (x, y))
                 if ts and tfs and tts and txs and tys:
                     template = add_text(img=template, text=ts[i], font_name=tfs[i], color=tcs, font_size=tts[i], x=txs[i], y=tys[i])
