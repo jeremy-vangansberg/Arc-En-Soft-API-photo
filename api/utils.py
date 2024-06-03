@@ -134,24 +134,21 @@ def apply_filter(img: Image, filter: str) -> Image:
 def add_text(
     img: Image = Image.new('RGB', (100, 100)), 
     text: str = "Sample Text", 
-    font_name: str = "arial", 
+    font_name: str = "/usr/share/fonts/arial.ttf",  # Path to Arial font
     font_size: int = 20, 
     x: int = 10, 
     y: int = 10, 
     align: Optional[str] = "left"
 ) -> Image:
-    from PIL import ImageDraw, ImageFont
+    try:
+        font = ImageFont.truetype(font_name, font_size)
+    except IOError:
+        print("Font not found. Using default font.")
+        font = ImageFont.load_default()
 
-    if isinstance(font_name, list):
-        font_name = font_name[0]  # or some other logic to select the correct item
-
-    if isinstance(font_size, list):
-        font_size = font_size[0]  # or some other logic to select the correct item
-
-    font = ImageFont.truetype(font_name, font_size)
     draw = ImageDraw.Draw(img)
     draw.text((x, y), text, font=font, align=align)
-
+    
     return img
 
 

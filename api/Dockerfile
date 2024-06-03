@@ -4,9 +4,12 @@ WORKDIR /app
 
 COPY requirements.txt requirements.txt
 
-RUN pip install --upgrade pip 
-
-RUN pip install -r requirements.txt
+RUN apt-get update && \
+    apt-get install -y wget fontconfig && \
+    wget https://github.com/iwms/ms-fonts/raw/master/arial.ttf -O /usr/share/fonts/arial.ttf && \
+    fc-cache -f -v && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 COPY . /app
 

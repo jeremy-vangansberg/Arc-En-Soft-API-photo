@@ -14,7 +14,7 @@ app = FastAPI()
 def create_image(
     template_url: str = Query('https://edit.org/img/blog/ate-preschool-yearbook-templates-free-editable.webp', alias="template_url", description="URL of the template image"),
     image_url: str = Query('https://www.photosscolaire.com/wp-content/uploads/2023/05/03-0285-0086-scaled.jpg', alias="image_url", description="URL of the image to be added"),
-    result_file: Optional[str] = Query('test.png', alias="result_file", description="Name of the file to save the result"),
+    result_file: Optional[str] = Query('test.png', alias="result_file", description="Name of the file to save the result. exemple: test.png"),
     xs: List[Optional[int]] = Query([5], alias="xs", description="List of x coordinates"),
     ys: List[Optional[int]] = Query([5], alias="ys", description="List of y coordinates"),
     rs: List[Optional[int]] = Query([90], alias="rs", description="List of rotation angles"),
