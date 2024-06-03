@@ -195,7 +195,7 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                 
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
                 y = int(template.height - (ys[i] / 100 * template.height) - new_image.height) if i < len(ys) else 0
-                template.paste(image, (x, y))
+                template.paste(new_image, (x, y))
                 if ts and tfs and tts and txs and tys:
                     template = add_text(img=template, text=ts[i], font_name=tfs[i], color=tcs, font_size=tts[i], x=txs[i], y=tys[i])
 
