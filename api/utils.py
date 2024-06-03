@@ -208,7 +208,8 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     log_folder="/log_folder")
 
         if result_file:
-            os.makedirs(os.path.dirname(result_file), exist_ok=True)
+            if os.path.dirname(result_file) :
+                os.makedirs(os.path.dirname(result_file), exist_ok=True)
             template.save(result_file)
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
     
