@@ -139,6 +139,7 @@ def add_text(
     color: str = "black",
     align: Optional[str] = "left"
 ) -> Image:
+    font_path = ''
     if font_name == "arial":
         font_path = "/usr/share/fonts/arial.ttf"
     elif font_name == "tnr":
