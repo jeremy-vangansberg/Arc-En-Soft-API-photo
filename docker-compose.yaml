@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  redis:
+      image: redis:latest
+      container_name: demo_redis
+      ports:
+        - "6379:6379"
+
+  celery_worker:
+    build: ./api/.
+    command: celery -A celery_worker.celery_app worker --loglevel=info
+    env_file:
+      - ./api/.env
+    depends_on:
+      - redis
+
+  fastapi:
+    build: ./api/.
+    container_name: fastapi_app
+    env_file:
+      - ./api/.env
+    expose:
+      - "80"
+
+  caddy:
+    build: .
+    container_name: caddy_server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
