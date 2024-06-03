@@ -104,11 +104,6 @@ def upload_file_ftp(file_path: str, ftp_host: str, ftp_username: str, ftp_passwo
             ftp.storbinary(f'STOR {complete_path}', file)
 
 
-# async def fetch_image(url):
-#     async with httpx.AsyncClient() as client:
-#         resp = await client.get(url)
-#     return Image.open(BytesIO(resp.content))
-
 def load_image(image_url: str) -> Image:
     response = requests.get(image_url)
     img = Image.open(BytesIO(response.content))
@@ -174,31 +169,32 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
         template = load_image(template_url)
         image = load_image(image_url)
 
+        default_rotation = rs[0] if rs else 0
+        default_width = ws[0] if ws else 100
+        default_filter = cs[0] if cs else 'none'
+        default_dh = dhs[0] if dhs else 0
+        default_db = dbs[0] if dbs else 0
+
+        # Transformation de l'image principale
         for i, _ in enumerate(xs):
             try:
-                rotation = rs[i] if i < len(rs) else 0
+                rotation = rs[i] if i < len(rs) else default_rotation
                 new_image = apply_rotation(image, rotation)
                 
-                top = dhs[i] if i < len(dhs) else 0
-                bottom = dbs[i] if i < len(dbs) else 0
+                top = dhs[i] if i < len(dhs) else default_dh
+                bottom = dbs[i] if i < len(dbs) else default_db
                 new_image = apply_crop(new_image, top, bottom)
                 
-                filter_ = cs[i] if i < len(cs) else None
+                filter_ = cs[i] if i < len(cs) else default_filter
                 new_image = apply_filter(new_image, filter_)
                 
-                new_width = int((ws[i] / 100) * new_image.width) if i < len(ws) else new_image.width
+                new_width = int((ws[i] / 100) * new_image.width) if i < len(ws) else int((default_width / 100) * new_image.width)
                 new_height = int(new_width * new_image.height / new_image.width)
                 new_image = new_image.resize((new_width, new_height))
 
-                
-
-                
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
                 y = int(template.height - (ys[i] / 100 * template.height) - new_image.height) if i < len(ys) else 0
                 template.paste(new_image, (x, y))
-                if ts and tfs and tts and txs and tys:
-                    template = add_text(img=template, text=ts[i], font_name=tfs[i], color=tcs, font_size=tts[i], x=txs[i], y=tys[i])
-
                 
             except ValueError as e:
                 log_message = f"Error at step {i}: {e}"
@@ -209,8 +205,28 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     log_message=log_message,
                     log_folder="/log_folder")
 
+        # Ajout de texte
+        for i, _ in enumerate(ts):
+            try:
+                text = ts[i]
+                font_name = tfs[i] if i < len(tfs) else 'arial'
+                color = tcs[i] if i < len(tcs) else 'black'
+                font_size = tts[i] if i < len(tts) else 10
+                tx = txs[i] if i < len(txs) else 0
+                ty = tys[i] if i < len(tys) else 0
+                template = add_text(img=template, text=text, font_name=font_name, color=color, font_size=font_size, x=tx, y=ty)
+            
+            except ValueError as e:
+                log_message = f"Error adding text at step {i}: {e}"
+                log_to_ftp(
+                    ftp_host=ftp_host,
+                    ftp_username=ftp_username,
+                    ftp_password=ftp_password,
+                    log_message=log_message,
+                    log_folder="/log_folder")
+
         if result_file:
-            if os.path.dirname(result_file) :
+            if os.path.dirname(result_file):
                 os.makedirs(os.path.dirname(result_file), exist_ok=True)
             template.save(result_file)
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)

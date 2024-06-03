@@ -21,19 +21,19 @@ def create_image(
     template_url: str = Query('https://edit.org/img/blog/ate-preschool-yearbook-templates-free-editable.webp', alias="template_url", description="URL of the template image"),
     image_url: str = Query('https://www.photosscolaire.com/wp-content/uploads/2023/05/03-0285-0086-scaled.jpg', alias="image_url", description="URL of the image to be added"),
     result_file: Optional[str] = Query('test.png', alias="result_file", description="Name of the file to save the result. exemple: test.png"),
-    xs: List[Optional[int]] = Query([], alias="xs", description="Liste des coordonnées x en %"),
-    ys: List[Optional[int]] = Query([], alias="ys", description="Liste des coordonnées y en %"),
-    rs: List[Optional[int]] = Query([], alias="rs", description="Liste des rotations en angle. (clockwise) ex: 90 ou -90"),
-    ws: List[Optional[float]] = Query([], alias="ws", description="Liste des largeurs en %"),
-    cs: List[Optional[str]] = Query([], alias="cs", description="Liste des filtres à appliquer. ex: NB"),
-    dhs: List[Optional[int]] = Query([], alias="dhs", description="Liste des % de hauteur à couper en haut"),
-    dbs: List[Optional[int]] = Query([], alias="dbs", description="Liste des % de hauteur à couper en bas"),
-    ts: List[Optional[str]] = Query([], alias="ts", description="Liste des textes à écrire"),
-    tfs: List[Optional[str]] = Query([], alias="tfs", description="Liste des polices. ex: arial, tnr"),
-    tcs: List[Optional[str]] = Query([], alias="tcs", description="Liste des couleurs du texte. ex: black, white"),
-    tts: List[Optional[int]] = Query([], alias="tts", description="Liste des tailles de la police"),
-    txs: List[Optional[int]] = Query([], alias="txs", description="Liste des positions x absolues"),
-    tys: List[Optional[int]] = Query([], alias="tys", description="Liste des positions y absolues")
+    xs: List[Optional[int]] = Query([5], alias="xs", description="Liste des coordonnées x en %"),
+    ys: List[Optional[int]] = Query([5], alias="ys", description="Liste des coordonnées y en %"),
+    rs: List[Optional[int]] = Query([90], alias="rs", description="Liste des rotations en angle. (clockwise) ex: 90 ou -90"),
+    ws: List[Optional[float]] = Query([10], alias="ws", description="Liste des largeurs en %"),
+    cs: List[Optional[str]] = Query(['string'], alias="cs", description="Liste des filtres à appliquer. ex: NB"),
+    dhs: List[Optional[int]] = Query([10], alias="dhs", description="Liste des % de hauteur à couper en haut"),
+    dbs: List[Optional[int]] = Query([5], alias="dbs", description="Liste des % de hauteur à couper en bas"),
+    ts: List[Optional[str]] = Query(['test'], alias="ts", description="Liste des textes à écrire"),
+    tfs: List[Optional[str]] = Query(['arial'], alias="tfs", description="Liste des polices. ex: arial, tnr"),
+    tcs: List[Optional[str]] = Query(['black'], alias="tcs", description="Liste des couleurs du texte. ex: black, white"),
+    tts: List[Optional[int]] = Query([10], alias="tts", description="Liste des tailles de la police"),
+    txs: List[Optional[int]] = Query([3], alias="txs", description="Liste des positions x absolues"),
+    tys: List[Optional[int]] = Query([3], alias="tys", description="Liste des positions y absolues")
 ):
     # Extraire les paramètres dynamiques
     dynamic_xs = get_parameters(request, 'x')
