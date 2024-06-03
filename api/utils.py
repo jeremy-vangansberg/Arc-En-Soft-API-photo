@@ -134,25 +134,39 @@ def apply_filter(img: Image, filter: str) -> Image:
 def add_text(
     img: Image = Image.new('RGB', (100, 100)), 
     text: str = "Sample Text", 
-    font_name: str = "/usr/share/fonts/arial.ttf",  # Path to Arial font
+    font_name: str = "arial",  # Path to Arial font
     font_size: int = 20, 
     x: int = 10, 
     y: int = 10, 
+    color: str = "black",
     align: Optional[str] = "left"
 ) -> Image:
+    if font_name == "arial":
+        font_path = "/usr/share/fonts/arial.ttf"
+    elif font_name == "tnr":
+        font_path = "/usr/share/fonts/TimesNewRoman.ttf"
     try:
-        font = ImageFont.truetype(font_name, font_size)
+        font = ImageFont.truetype(font_path, font_size)
     except IOError:
         print("Font not found. Using default font.")
         font = ImageFont.load_default()
 
     draw = ImageDraw.Draw(img)
-    draw.text((x, y), text, font=font, align=align)
+
+    # _, text_height = draw.textsize(text, font=font)
+    _, heigth = img.size
+
+    y = heigth - y - font_size
+    if color == "black":
+        color = (255, 255, 255)
+    else:
+        color = (0, 0, 0)
+    draw.text((x, y), text, font=font, fill=color, align=align)
     
     return img
 
 
-def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tts, txs, tys, ftp_host, ftp_username, ftp_password):
+def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password):
     """
     A function to download data, process it, and upload it to a server.
     """
@@ -176,13 +190,14 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                 new_height = int(new_width * image.height / image.width)
                 image = image.resize((new_width, new_height))
 
-                if ts and tfs and tts and txs and tys:
-                    image = add_text(img=image, text=ts[i], font_name=tfs[i], font_size=tts[i], x=txs[i], y=tys[i])
+                
 
                 
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
                 y = int(template.height - (ys[i] / 100 * template.height) - image.height) if i < len(ys) else 0
                 template.paste(image, (x, y))
+                if ts and tfs and tts and txs and tys:
+                    template = add_text(img=template, text=ts[i], font_name=tfs[i], color=tcs, font_size=tts[i], x=txs[i], y=tys[i])
 
                 
             except ValueError as e:
@@ -195,6 +210,7 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     log_folder="/log_folder")
 
         if result_file:
+            os.makedirs(os.path.dirname(result_file), exist_ok=True)
             template.save(result_file)
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
     
