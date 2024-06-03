@@ -126,8 +126,6 @@ def apply_crop(img: Image, dh: int, db: int) -> Image:
 def apply_filter(img: Image, filter: str) -> Image:
     if filter == 'NB':
         return ImageOps.grayscale(img)
-    elif filter == 'SE':
-        return ImageOps.sepia(img)
     else:
         return img
 
@@ -225,4 +223,5 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     log_folder="/log_folder")
     
     finally:
-        clean_up_files([result_file])
+        if result_file and os.path.exists(result_file):
+            clean_up_files([result_file])

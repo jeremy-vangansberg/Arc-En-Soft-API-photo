@@ -19,7 +19,7 @@ def create_image(
     ys: List[Optional[int]] = Query([5], alias="ys", description="Coordonnées x en %"),
     rs: List[Optional[int]] = Query([90], alias="rs", description="Rotation en angle. (clockwise) ex: 90 ou -90"),
     ws: List[Optional[float]] = Query([10], alias="ws", description="Largeur en %"),
-    cs: List[Optional[str]] = Query(['string'], alias="cs", description="Filtre à appliquer. ex: NB, SE"),
+    cs: List[Optional[str]] = Query(['string'], alias="cs", description="Filtre à appliquer. ex: NB"),
     dhs: List[Optional[int]] = Query([10], alias="dhs", description="% de hauteur à couper en haut"),
     dbs: List[Optional[int]] = Query([5], alias="dbs", description="% de hauteur à couper en bas"),
     ts: List[Optional[str]] = Query(['test'], alias="ts", description="Text à écrire"),
