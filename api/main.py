@@ -22,12 +22,11 @@ def create_image(
     cs: List[Optional[str]] = Query(['string'], alias="cs", description="List of filters"),
     dhs: List[Optional[int]] = Query([10], alias="dhs", description="List of top crop heights"),
     dbs: List[Optional[int]] = Query([5], alias="dbs", description="List of bottom crop heights"),
-    ts: List[Optional[str]] = Query(['string'], alias="ts", description="List of texts"),
-    tfs: List[Optional[str]] = Query(['string'], alias="tfs", description="List of font sizes"),
-    tts: List[Optional[int]] = Query([0], alias="tts", description="List of text x coordinates"),
-    txs: List[Optional[int]] = Query([0], alias="txs", description="List of text y coordinates"),
-    tys: List[Optional[int]] = Query([0], alias="tys", description="List of text aligns"),
-    tas: List[Optional[str]] = Query(['string'], alias="tas", description="List of text aligns"),
+    ts: List[Optional[str]] = Query(['string'], alias="ts", description="Text"),
+    tfs: List[Optional[str]] = Query(['string'], alias="tfs", description="Font"),
+    tts: List[Optional[int]] = Query([0], alias="tts", description="Taille de la police"),
+    txs: List[Optional[int]] = Query([0], alias="txs", description="position x"),
+    tys: List[Optional[int]] = Query([0], alias="tys", description="position y")
 ):
    
    task = celery_app.send_task(
@@ -48,7 +47,6 @@ def create_image(
             tts,
             txs,
             tys,
-            tas,
             os.getenv("FTP_HOST"), 
             os.getenv("FTP_USERNAME"), 
             os.getenv("FTP_PASSWORD")

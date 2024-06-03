@@ -152,7 +152,7 @@ def add_text(
     return img
 
 
-def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tts, txs, tys, tas, ftp_host, ftp_username, ftp_password):
+def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tts, txs, tys, ftp_host, ftp_username, ftp_password):
     """
     A function to download data, process it, and upload it to a server.
     """
@@ -175,10 +175,15 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                 new_width = int((ws[i] / 100) * image.width) if i < len(ws) else image.width
                 new_height = int(new_width * image.height / image.width)
                 image = image.resize((new_width, new_height))
+
+                if ts and tfs and tts and txs and tys:
+                    image = add_text(img=image, text=ts[i], font_name=tfs[i], font_size=tts[i], x=txs[i], y=tys[i])
+
                 
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
                 y = int(template.height - (ys[i] / 100 * template.height) - image.height) if i < len(ys) else 0
                 template.paste(image, (x, y))
+
                 
             except ValueError as e:
                 log_message = f"Error at step {i}: {e}"
