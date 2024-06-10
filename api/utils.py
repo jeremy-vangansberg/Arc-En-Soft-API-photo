@@ -168,6 +168,7 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
     try:
         template = load_image(template_url)
         image = load_image(image_url)
+        
 
         default_rotation = rs[0] if rs else 0
         default_width = ws[0] if ws else 100
@@ -242,5 +243,20 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     log_folder="/log_folder")
     
     finally:
+        
         if result_file and os.path.exists(result_file):
             clean_up_files([result_file])
+
+        xs = []
+        ys = []
+        rs = []
+        ws = []
+        cs = []
+        dhs = []
+        dbs = []
+        ts = []
+        tfs = []
+        tcs = []
+        tts = []
+        txs = []
+        tys = []

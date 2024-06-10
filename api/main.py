@@ -1,73 +1,101 @@
-from fastapi import FastAPI, HTTPException, Query, Request
-from typing import Optional, List
+from fastapi import FastAPI, Query, Request, HTTPException
+from typing import Optional, List, Dict, Any
 import os
 from celery_worker import celery_app
+import re
 
 app = FastAPI()
 
-def get_parameters(request: Request, prefix: str) -> List:
-    params = []
-    for i in range(1, 100):  # Suppose un maximum de 100 paramètres par type
-        param = request.query_params.get(f"{prefix}{i}")
-        if param is not None:
-            params.append(param)
-        else:
-            break
-    return params
+def parse_dynamic_params(request: Request) -> Dict[str, List[Any]]:
+    params = request.query_params
+    dynamic_params = {}
+
+    for key, value in params.items():
+        match = re.match(r"([a-z]+)(\d+)", key)
+        if match:
+            param_name, index = match.groups()
+            if param_name not in dynamic_params:
+                dynamic_params[param_name] = []
+            dynamic_params[param_name].append(value)
+
+    return dynamic_params
 
 @app.get("/create_image/")
 def create_image(
     request: Request,
     template_url: str = Query('https://edit.org/img/blog/ate-preschool-yearbook-templates-free-editable.webp', alias="template_url", description="URL of the template image"),
     image_url: str = Query('https://www.photosscolaire.com/wp-content/uploads/2023/05/03-0285-0086-scaled.jpg', alias="image_url", description="URL of the image to be added"),
-    result_file: Optional[str] = Query('test.png', alias="result_file", description="Name of the file to save the result. exemple: test.png"),
-    xs: List[Optional[int]] = Query([5], alias="xs", description="Liste des coordonnées x en %"),
-    ys: List[Optional[int]] = Query([5], alias="ys", description="Liste des coordonnées y en %"),
-    rs: List[Optional[int]] = Query([90], alias="rs", description="Liste des rotations en angle. (clockwise) ex: 90 ou -90"),
-    ws: List[Optional[float]] = Query([10], alias="ws", description="Liste des largeurs en %"),
-    cs: List[Optional[str]] = Query(['string'], alias="cs", description="Liste des filtres à appliquer. ex: NB"),
-    dhs: List[Optional[int]] = Query([10], alias="dhs", description="Liste des % de hauteur à couper en haut"),
-    dbs: List[Optional[int]] = Query([5], alias="dbs", description="Liste des % de hauteur à couper en bas"),
-    ts: List[Optional[str]] = Query(['test'], alias="ts", description="Liste des textes à écrire"),
-    tfs: List[Optional[str]] = Query(['arial'], alias="tfs", description="Liste des polices. ex: arial, tnr"),
-    tcs: List[Optional[str]] = Query(['black'], alias="tcs", description="Liste des couleurs du texte. ex: black, white"),
-    tts: List[Optional[int]] = Query([10], alias="tts", description="Liste des tailles de la police"),
-    txs: List[Optional[int]] = Query([3], alias="txs", description="Liste des positions x absolues"),
-    tys: List[Optional[int]] = Query([3], alias="tys", description="Liste des positions y absolues")
+    result_file: Optional[str] = Query('test.png', alias="result_file", description="Name of the file to save the result"),
+    xs: List[Optional[int]] = Query([5], alias="xs", description="List of x coordinates in %"),
+    ys: List[Optional[int]] = Query([5], alias="ys", description="List of y coordinates in %"),
+    rs: List[Optional[int]] = Query([90], alias="rs", description="List of rotations in angle (clockwise)"),
+    ws: List[Optional[float]] = Query([10], alias="ws", description="List of widths in %"),
+    cs: List[Optional[str]] = Query(['string'], alias="cs", description="List of filters to apply"),
+    dhs: List[Optional[int]] = Query([10], alias="dhs", description="List of % of height to cut at the top"),
+    dbs: List[Optional[int]] = Query([5], alias="dbs", description="List of % of height to cut at the bottom"),
+    ts: List[Optional[str]] = Query(['test'], alias="ts", description="List of texts to write"),
+    tfs: List[Optional[str]] = Query(['arial'], alias="tfs", description="List of fonts (e.g., arial, tnr)"),
+    tcs: List[Optional[str]] = Query(['black'], alias="tcs", description="List of text colors (e.g., black, white)"),
+    tts: List[Optional[int]] = Query([10], alias="tts", description="List of font sizes"),
+    txs: List[Optional[int]] = Query([3], alias="txs", description="List of absolute x positions"),
+    tys: List[Optional[int]] = Query([3], alias="tys", description="List of absolute y positions")
 ):
-    # Extraire les paramètres dynamiques
-    dynamic_xs = get_parameters(request, 'x')
-    dynamic_ys = get_parameters(request, 'y')
-    dynamic_rs = get_parameters(request, 'r')
-    dynamic_ws = get_parameters(request, 'w')
-    dynamic_cs = get_parameters(request, 'c')
-    dynamic_dhs = get_parameters(request, 'dh')
-    dynamic_dbs = get_parameters(request, 'db')
-    dynamic_ts = get_parameters(request, 't')
-    dynamic_tfs = get_parameters(request, 'tf')
-    dynamic_tcs = get_parameters(request, 'tc')
-    dynamic_tts = get_parameters(request, 'tt')
-    dynamic_txs = get_parameters(request, 'tx')
-    dynamic_tys = get_parameters(request, 'ty')
+    # Parse dynamic parameters
+    dynamic_params = parse_dynamic_params(request)
+    
+    # Extract dynamic coordinates and other parameters if they exist
+    dynamic_xs = list(map(int, dynamic_params.get('x', [])))
+    dynamic_ys = list(map(int, dynamic_params.get('y', [])))
+    dynamic_rs = list(map(int, dynamic_params.get('r', [])))
+    dynamic_ws = list(map(float, dynamic_params.get('w', [])))
+    dynamic_cs = dynamic_params.get('c', [])
+    dynamic_dhs = list(map(int, dynamic_params.get('dh', [])))
+    dynamic_dbs = list(map(int, dynamic_params.get('db', [])))
+    dynamic_ts = dynamic_params.get('t', [])
+    dynamic_tfs = dynamic_params.get('tf', [])
+    dynamic_tcs = dynamic_params.get('tc', [])
+    dynamic_tts = list(map(int, dynamic_params.get('tt', [])))
+    dynamic_txs = list(map(int, dynamic_params.get('tx', [])))
+    dynamic_tys = list(map(int, dynamic_params.get('ty', [])))
 
-    # Combine les paramètres fixes et dynamiques
-    xs.extend(dynamic_xs)
-    ys.extend(dynamic_ys)
-    rs.extend(dynamic_rs)
-    ws.extend(dynamic_ws)
-    cs.extend(dynamic_cs)
-    dhs.extend(dynamic_dhs)
-    dbs.extend(dynamic_dbs)
-    ts.extend(dynamic_ts)
-    tfs.extend(dynamic_tfs)
-    tcs.extend(dynamic_tcs)
-    tts.extend(dynamic_tts)
-    txs.extend(dynamic_txs)
-    tys.extend(dynamic_tys)
+    # Merge fixed and dynamic parameters without duplicates
+    xs.extend([x for x in dynamic_xs if x not in xs])
+    ys.extend([y for y in dynamic_ys if y not in ys])
+    rs.extend([r for r in dynamic_rs if r not in rs])
+    ws.extend([w for w in dynamic_ws if w not in ws])
+    cs.extend([c for c in dynamic_cs if c not in cs])
+    dhs.extend([dh for dh in dynamic_dhs if dh not in dhs])
+    dbs.extend([db for db in dynamic_dbs if db not in dbs])
+    ts.extend([t for t in dynamic_ts if t not in ts])
+    tfs.extend([tf for tf in dynamic_tfs if tf not in tfs])
+    tcs.extend([tc for tc in dynamic_tcs if tc not in tcs])
+    tts.extend([tt for tt in dynamic_tts if tt not in tts])
+    txs.extend([tx for tx in dynamic_txs if tx not in txs])
+    tys.extend([ty for ty in dynamic_tys if ty not in tys])
 
-    # Appeler la tâche Celery
+    # Ensure consistent list lengths by filling missing values if necessary
+    max_length = max(len(xs), len(ys), len(rs), len(ws), len(cs), len(dhs), len(dbs), len(ts), len(tfs), len(tcs), len(tts), len(txs), len(tys))
+    
+    def fill_list(lst, default_value, length):
+        return lst + [default_value] * (length - len(lst))
+    
+    xs = fill_list(xs, 0, max_length)
+    ys = fill_list(ys, 0, max_length)
+    rs = fill_list(rs, 0, max_length)
+    ws = fill_list(ws, 0.0, max_length)
+    cs = fill_list(cs, '', max_length)
+    dhs = fill_list(dhs, 0, max_length)
+    dbs = fill_list(dbs, 0, max_length)
+    ts = fill_list(ts, '', max_length)
+    tfs = fill_list(tfs, '', max_length)
+    tcs = fill_list(tcs, '', max_length)
+    tts = fill_list(tts, 0, max_length)
+    txs = fill_list(txs, 0, max_length)
+    tys = fill_list(tys, 0, max_length)
+    
+    # Call the Celery task
     task = celery_app.send_task(
-        "tasks.process_and_upload_task", 
+        "tasks.process_and_upload_task",
         args=[
             template_url,
             image_url,
@@ -90,4 +118,5 @@ def create_image(
             os.getenv("FTP_PASSWORD")
         ]
     )
-    return {"message": "Image processed successfully", "task_id": task.id}
+
+    return {"message": "Image processing started", "task_id": task.id}
