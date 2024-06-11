@@ -1,10 +1,7 @@
-from fastapi import FastAPI, Query, Request, HTTPException
-from typing import Optional, List, Dict, Any
+from fastapi import FastAPI, Query, Request
+from typing import Optional, List
 import os
 from celery_worker import celery_app
-import re
-from utils import log_request_to_ftp
-
 
 app = FastAPI()
 

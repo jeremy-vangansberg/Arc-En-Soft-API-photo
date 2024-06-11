@@ -2,15 +2,11 @@ import pytz
 from datetime import datetime
 import os
 from ftplib import FTP
-from fastapi import FastAPI, HTTPException, Query, Request
-from starlette.responses import JSONResponse
 from tempfile import NamedTemporaryFile
-import subprocess
 import requests
-from typing import Optional, List
+from typing import Optional
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
-import httpx
 
 def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
     """
@@ -202,14 +198,14 @@ def add_text(
     # _, text_height = draw.textsize(text, font=font)
     _, heigth = img.size
 
+    y = (y / 100) * heigth
     y = heigth - y - font_size
-    if color == "black":
-        color = (255, 255, 255)
-    else:
-        color = (0, 0, 0)
-
     x = (x / 100) * img.width
-    y = img.height - ((y / 100) * img.height)
+
+    if color == "black":
+        color = (0, 0, 0)
+    else:
+        color = (255, 255, 255)
 
     draw.text((x, y), text, font=font, fill=color, align=align)
     
@@ -265,11 +261,11 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
         for i, _ in enumerate(ts):
             try:
                 text = ts[i]
-                font_name = tfs[i] if i < len(tfs) else 'arial'
-                color = tcs[i] if i < len(tcs) else 'black'
-                font_size = tts[i] if i < len(tts) else 10
-                tx = txs[i] if i < len(txs) else 0
-                ty = tys[i] if i < len(tys) else 0
+                font_name = tfs[i] 
+                color = tcs[i] 
+                font_size = tts[i] 
+                tx = txs[i]
+                ty = tys[i]
 
                 # Utilisation de la fonction add_text mise à jour
                 template = add_text(img=template, text=text, font_name=font_name, color=color, font_size=font_size, x=tx, y=ty)
