@@ -4,7 +4,7 @@ import os
 from ftplib import FTP
 from tempfile import NamedTemporaryFile
 import requests
-from typing import Optional
+from typing import Optional, List, Dict
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -107,7 +107,7 @@ def ensure_ftp_path(ftp, path):
     current_path = ''
     for directory in directories:
         if directory:  # Ignore les chaînes vides
-            current_path +=  directory
+            current_path += directory
             try:
                 ftp.cwd(current_path)  # Tente de naviguer dans le dossier
                 print(f"Navigated to: {current_path}")  # Debugging message
@@ -159,7 +159,7 @@ def load_image(image_url: str) -> Image:
 def apply_rotation(img: Image, rotation: int) -> Image:
     return img.rotate(rotation, expand=True, fillcolor=None)
 
-def apply_crop(img: Image, dh: int, db: int) -> Image:
+def apply_crop(img: Image, dh: float, db: float) -> Image:
     width, height = img.size
     top = (dh / 100) * height
     bottom = height - (db / 100) * height
@@ -176,17 +176,25 @@ def add_text(
     text: str = "Sample Text", 
     font_name: str = "arial",  # Path to Arial font
     font_size: int = 20, 
-    x: int = 10, 
-    y: int = 10, 
-    color: str = "black",
+    x: float = 10, 
+    y: float = 10, 
+    color: str = "FFFFFF",
     align: Optional[str] = "left"
 ) -> Image:
     
     font_path = ''
-    if font_name == "arial":
-        font_path = "/usr/share/fonts/arial.ttf"
-    elif font_name == "tnr":
-        font_path = "/usr/share/fonts/TimesNewRoman.ttf"
+
+    match font_name:
+        case "arial" :
+            font_path = "/usr/share/fonts/arial.ttf"
+        case "tnr" :
+            font_path = "/usr/share/fonts/TimesNewRoman.ttf"
+        case "helvetica" :
+            font_path = "/usr/share/fonts/Helvetica.ttf"
+        case "verdana" :
+            font_path = "/usr/share/fonts/Verdana.ttf"
+        case "avenir" :
+            font_path = "/usr/share/fonts/AvenirNextCyr-Regular.ttf"
     try:
         font = ImageFont.truetype(font_path, font_size)
     except IOError:
@@ -194,22 +202,64 @@ def add_text(
         font = ImageFont.load_default()
 
     draw = ImageDraw.Draw(img)
+    width, height = img.size
+    y = (y / 100) * height
+    x = (x / 100) * width
+    color = "#" + color
 
-    # _, text_height = draw.textsize(text, font=font)
-    _, heigth = img.size
-
-    y = (y / 100) * heigth
-    y = heigth - y - font_size
-    x = (x / 100) * img.width
-
-    if color == "black":
-        color = (0, 0, 0)
-    else:
-        color = (255, 255, 255)
-
-    draw.text((x, y), text, font=font, fill=color, align=align)
+    # Diviser le texte en lignes
+    lines = text.split("<br>")
+    line_height = font_size + 5  # Ajouter un espace entre les lignes
     
+    for i, line in enumerate(lines):
+        draw.text((x, y + i * line_height), line, font=font, fill=color, align=align)
+
     return img
+
+def process_intercalaire(background_color: str, width: int, height: int, text_blocks: List[Dict], ftp_host: str, ftp_username: str, ftp_password: str):
+    """
+    A function to create an image with multiple text blocks and upload it to a server.
+    """
+    try:
+        # Create a new image with the specified background color
+        background_color = "#" + background_color
+        img = Image.new('RGB', (width, height), background_color)
+
+        # Add each text block
+        for block in text_blocks:
+            img = add_text(
+                img=img,
+                text=block["text"],
+                font_name=block.get("font_name", "arial"),
+                font_size=block.get("font_size", 20),
+                x=block["x"],
+                y=block["y"],
+                color=block.get("color", "black"),
+                align=block.get("align", "left")
+            )
+
+        # Save the image temporarily
+        temp_file_path = f"/tmp/intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        img.save(temp_file_path)
+
+        # Upload the file to the FTP server
+        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, f"intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+
+        # Clean up temporary files
+        clean_up_files([temp_file_path])
+
+        return {"message": "Intercalaire created successfully"}
+
+    except Exception as e:
+        log_message = f"Error creating intercalaire: {str(e)}"
+        log_to_ftp(
+            ftp_host=ftp_host,
+            ftp_username=ftp_username,
+            ftp_password=ftp_password,
+            log_message=log_message,
+            log_folder="error_logs"
+        )
+        raise e
 
 def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, params):
     """
@@ -242,10 +292,13 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                 
                 new_width = int((ws[i] / 100) * new_image.width) if i < len(ws) else int((default_width / 100) * new_image.width)
                 new_height = int(new_width * new_image.height / new_image.width)
+                if new_width <= 0 or new_height <= 0:
+                    raise ValueError(f"Invalid dimensions for the image at step {i}: width={new_width}, height={new_height}")
+
                 new_image = new_image.resize((new_width, new_height))
 
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
-                y = int(template.height - (ys[i] / 100 * template.height) - new_image.height) if i < len(ys) else 0
+                y = int(ys[i] / 100 * template.height) if i < len(ys) else 0
                 template.paste(new_image, (x, y))
                 
             except ValueError as e:

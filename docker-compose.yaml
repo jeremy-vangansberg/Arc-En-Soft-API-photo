@@ -21,6 +21,8 @@ services:
       - ./api/.env
     expose:
       - "80"
+    volumes:
+      - ./api:/app
 
   caddy:
     build: .
@@ -31,6 +33,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - ./api:/app
+      
 
 volumes:
   caddy_data:
