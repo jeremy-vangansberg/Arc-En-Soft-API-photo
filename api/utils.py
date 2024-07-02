@@ -7,6 +7,41 @@ import requests
 from typing import Optional, List, Dict
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
+import numpy as np
+import cv2
+
+def apply_resize_template(result_img, new_width):
+    width, height = result_img.size
+    new_height = int((new_width / width) * height)
+    resized_img = result_img.resize((new_width, new_height))
+    return resized_img
+
+
+def apply_cartoon_filter(image_path):
+    # Lire l'image
+    img = cv2.imread(image_path)
+
+    # Appliquer une transformation en niveau de gris
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Appliquer un flou médian pour réduire le bruit
+    gray = cv2.medianBlur(gray, 5)
+
+    # Détection des contours en utilisant l'algorithme de Canny
+    edges = cv2.adaptiveThreshold(cv2.medianBlur(gray, 7), 255,
+                                  cv2.ADAPTIVE_THRESH_MEAN_C,
+                                  cv2.THRESH_BINARY, 9, 7)
+
+    # Réduire la couleur
+    color = cv2.bilateralFilter(img, 9, 300, 300)
+
+    # Fusionner les contours et l'image en couleur réduite
+    cartoon = cv2.bitwise_and(color, color, mask=edges)
+    
+    # Convertir l'image de BGR à RGB pour l'affichage avec matplotlib
+    cartoon_rgb = cv2.cvtColor(cartoon, cv2.COLOR_BGR2RGB)
+    
+    return cartoon_rgb
 
 def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
     """
@@ -165,11 +200,15 @@ def apply_crop(img: Image, dh: float, db: float) -> Image:
     bottom = height - (db / 100) * height
     return img.crop((0, top, width, bottom))
 
-def apply_filter(img: Image, filter: str) -> Image:
-    if filter == 'NB':
-        return ImageOps.grayscale(img)
-    else:
-        return img
+def apply_filter(img: Image, _filter: str) -> Image:
+
+    match _filter:
+        case 'NB':
+            return ImageOps.grayscale(img)
+        case "cartoon" : 
+            return apply_cartoon_filter(img)
+        case _ : 
+            return img
 
 def add_text(
     img: Image = Image.new('RGB', (100, 100)), 
@@ -261,7 +300,7 @@ def process_intercalaire(background_color: str, width: int, height: int, text_bl
         )
         raise e
 
-def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, params):
+def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, params):
     """
     A function to download data, process it, and upload it to a server.
     """
@@ -331,10 +370,14 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     ftp_password=ftp_password,
                     log_message=log_message,
                     log_folder="/error_logs")
+        #resize img
+        if result_w : 
+            template = apply_resize_template(template, result_w)
 
         if result_file:
             if os.path.dirname(result_file):
                 os.makedirs(os.path.dirname(result_file), exist_ok=True)
+            
             template.save(result_file)
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
     
