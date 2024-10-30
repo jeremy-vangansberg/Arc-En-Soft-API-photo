@@ -184,7 +184,7 @@ def create_image(
             tts,
             txs,
             tys,
-            os.getenv("FTP_HOST"), 
+            ftp_host, 
             os.getenv("FTP_USERNAME"), 
             os.getenv("FTP_PASSWORD"), 
             params
