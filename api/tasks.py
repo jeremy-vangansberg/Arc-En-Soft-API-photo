@@ -10,5 +10,5 @@ def process_and_upload_task(template_url, image_url, result_file, result_w, xs, 
     process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, params)
 
 @shared_task
-def process_intercalaire_task(background_color, width, height, text_blocks, ftp_host, ftp_username, ftp_password):
+def process_intercalaire_task(result_file, background_color, width, height, text_blocks, ftp_host, ftp_username, ftp_password):
     return process_intercalaire(result_file, background_color, width, height, text_blocks, ftp_host, ftp_username, ftp_password)
