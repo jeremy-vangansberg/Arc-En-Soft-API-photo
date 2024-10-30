@@ -197,6 +197,11 @@ def create_image(
 @app.post("/intercalaire/")
 def create_intercalaire(
     request: Request,
+    result_file: Optional[str] = Query(
+        'exemple/test.png',
+        alias="result_file",
+        description="Name of the file to save the result. Example: 'result.png'"
+    ),
     ftp_host : str = Query('ftp.pdgw1190.odns.fr',
         alias="ftp_host",
         description="FTP url"),
@@ -382,6 +387,7 @@ def create_intercalaire(
     task = celery_app.send_task(
         "tasks.process_intercalaire_task",
         args=[
+            result_file,
             background_color,
             width,
             height,

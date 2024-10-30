@@ -255,7 +255,7 @@ def add_text(
 
     return img
 
-def process_intercalaire(background_color: str, width: int, height: int, text_blocks: List[Dict], ftp_host: str, ftp_username: str, ftp_password: str):
+def process_intercalaire(result_file: str, background_color: str, width: int, height: int, text_blocks: List[Dict], ftp_host: str, ftp_username: str, ftp_password: str):
     """
     A function to create an image with multiple text blocks and upload it to a server.
     """
@@ -282,7 +282,7 @@ def process_intercalaire(background_color: str, width: int, height: int, text_bl
         img.save(temp_file_path)
 
         # Upload the file to the FTP server
-        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, f"intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, result_file)
 
         # Clean up temporary files
         clean_up_files([temp_file_path])
