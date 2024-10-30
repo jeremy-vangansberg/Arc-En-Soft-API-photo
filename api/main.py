@@ -197,6 +197,9 @@ def create_image(
 @app.post("/intercalaire/")
 def create_intercalaire(
     request: Request,
+    ftp_host : str = Query('ftp.pdgw1190.odns.fr',
+        alias="ftp_host",
+        description="FTP url"),
     background_color: str = Query(
         'FFFFFF',
         alias="background_color",
@@ -383,7 +386,7 @@ def create_intercalaire(
             width,
             height,
             text_blocks,
-            os.getenv("FTP_HOST"),
+            ftp_host,
             os.getenv("FTP_USERNAME"),
             os.getenv("FTP_PASSWORD")
         ]
