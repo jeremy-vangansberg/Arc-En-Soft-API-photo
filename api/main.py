@@ -8,6 +8,9 @@ app = FastAPI()
 @app.get("/create_image/")
 def create_image(
     request: Request,
+    ftp_host : str = Query('ftp.pdgw1190.odns.fr',
+        alias="ftp_host",
+        description="FTP url"),
     template_url: str = Query(
         'https://edit.org/img/blog/ate-preschool-yearbook-templates-free-editable.webp',
         alias="template_url",
