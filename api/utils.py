@@ -1,120 +1,11 @@
-import pytz
 from datetime import datetime
 import os
 from ftplib import FTP
-from tempfile import NamedTemporaryFile
-import requests
-from typing import Optional, List, Dict
-from PIL import Image, ImageOps, ImageDraw, ImageFont
-from io import BytesIO
+from typing import List, Dict
+from PIL import Image
+from photo_utils import apply_watermark, apply_resize_template, add_text, apply_filter, apply_crop, apply_rotation, load_image
+from ftp_utils import log_request_to_ftp, log_to_ftp, upload_file_ftp
 
-def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
-    """
-    Enregistre les paramètres de la requête dans un fichier texte et téléverse sur le serveur FTP.
-
-    Args:
-    - params (dict): Dictionnaire des paramètres de la requête.
-    - ftp_host (str): L'hôte du serveur FTP.
-    - ftp_username (str): Le nom d'utilisateur pour se connecter au serveur FTP.
-    - ftp_password (str): Le mot de passe pour se connecter au serveur FTP.
-    - log_folder (str): Le dossier sur le serveur FTP où le fichier de log sera enregistré.
-    """
-    log_message = f"Request received at {datetime.now().isoformat()} with parameters: {params}\n"
-    
-    # Crée un nom de fichier basé sur la date et l'heure actuelle
-    tz = pytz.timezone('Europe/Paris')
-    now = datetime.now(tz)
-    log_filename = f"request_log_{now.strftime('%Y%m%d_%H%M%S')}.txt"
-    log_file_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-    
-    print(f"Creating log file at: {log_file_path}")  # Debugging message
-
-    with NamedTemporaryFile("w", delete=False) as temp_log_file:
-        temp_log_file.write(log_message)
-        temp_log_path = temp_log_file.name
-
-    print(f"Temporary log file created at: {temp_log_path}")  # Debugging message
-
-    try:
-        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-            ftp.cwd('/')  # Assurez-vous d'être à la racine
-            if log_folder != '/':  # Vérifie si le dossier de logs n'est pas la racine
-                ensure_ftp_path(ftp, log_folder)
-                print(f"Ensured FTP path: {log_folder}")  # Debugging message
-            
-            # Construire le chemin complet du fichier sur le serveur FTP
-            complete_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-            print(f"Complete path on FTP: {complete_path}")  # Debugging message
-
-            with open(temp_log_path, 'rb') as file:
-                ftp.storbinary(f'STOR {complete_path}', file)
-                print(f"Log file uploaded to FTP: {complete_path}")  # Debugging message
-
-    except Exception as e:
-        print(f"Erreur lors du téléversement du log sur FTP : {e}")
-
-    finally:
-        os.remove(temp_log_path)  # Nettoyage du fichier temporaire
-        print(f"Temporary log file removed: {temp_log_path}")  # Debugging message
-
-
-def log_to_ftp(ftp_host: str, ftp_username: str, ftp_password: str, log_message: str, log_folder: str = "error_logs"):
-    """
-    Enregistre un message de log dans un dossier spécifié sur un serveur FTP.
-
-    Args:
-    - ftp_host (str): L'hôte du serveur FTP.
-    - ftp_username (str): Le nom d'utilisateur pour se connecter au serveur FTP.
-    - ftp_password (str): Le mot de passe pour se connecter au serveur FTP.
-    - log_message (str): Le message à enregistrer dans le fichier de log.
-    - log_folder (str): Le dossier sur le serveur FTP où le fichier de log sera enregistré.
-    """
-
-    # Crée un nom de fichier basé sur la date et l'heure actuelle
-    tz = pytz.timezone('Europe/Paris')
-
-    now = datetime.now(tz)
-
-    log_filename = f"error_log_{now.strftime('%Y%m%d_%H%M%S')}.txt"
-    log_file_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-    
-    print(f"Tentative de log FTP dans : {log_file_path}")  # Débogage
-    
-    with NamedTemporaryFile("w", delete=False) as temp_log_file:
-        temp_log_file.write(log_message)
-        temp_log_path = temp_log_file.name
-
-    try:
-        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-            ftp.cwd('/')  # Assurez-vous d'être à la racine
-            if log_folder != '/':  # Vérifie si le dossier de logs n'est pas la racine
-                ensure_ftp_path(ftp, log_folder)
-            with open(temp_log_path, 'rb') as file:
-                ftp.storbinary(f'STOR {log_file_path}', file)
-    except Exception as e:
-        print(f"Erreur lors du téléversement du log sur FTP : {e}")
-    finally:
-        os.remove(temp_log_path)  # Nettoyage du fichier temporaire
-
-
-def ensure_ftp_path(ftp, path):
-    """
-    Crée récursivement le chemin sur le serveur FTP si nécessaire.
-    """
-    path = path.lstrip('/')  # Supprime le slash initial pour éviter les chemins absolus
-    directories = path.split('/')
-    
-    current_path = ''
-    for directory in directories:
-        if directory:  # Ignore les chaînes vides
-            current_path += directory
-            try:
-                ftp.cwd(current_path)  # Tente de naviguer dans le dossier
-                print(f"Navigated to: {current_path}")  # Debugging message
-            except Exception:
-                ftp.mkd(current_path)  # Crée le dossier s'il n'existe pas
-                ftp.cwd(current_path)  # Navigue dans le dossier nouvellement créé
-                print(f"Created and navigated to: {current_path}")  # Debugging message
 
 
 def clean_up_files(file_paths: list):
@@ -123,100 +14,7 @@ def clean_up_files(file_paths: list):
         if path and os.path.exists(path):
             os.remove(path)
 
-def upload_file_ftp(file_path: str, ftp_host: str, ftp_username: str, ftp_password: str, output_path: str):
-    """
-    Téléverse un fichier sur un serveur FTP.
-
-    Args:
-    - file_path (str): Le chemin local du fichier à téléverser.
-    - ftp_host (str): L'hôte du serveur FTP.
-    - ftp_username (str): Le nom d'utilisateur pour se connecter au serveur FTP.
-    - ftp_password (str): Le mot de passe pour se connecter au serveur FTP.
-    - output_path (str): Le chemin complet sur le serveur FTP où le fichier doit être téléversé.
-
-    Cette fonction assure que le chemin de destination existe sur le serveur FTP
-    et téléverse le fichier spécifié à cet emplacement.
-    """
-    with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-        # Assure que le chemin du dossier existe sur le serveur FTP
-        directory_path, filename = os.path.split(output_path)
-        ensure_ftp_path(ftp, directory_path)
-        
-        # Construit le chemin complet du fichier sur le serveur FTP
-        ftp.cwd('/')  # S'assure de partir de la racine
-        complete_path = os.path.join(directory_path, filename).lstrip('/')
-        
-        # Téléverse le fichier
-        with open(file_path, 'rb') as file:
-            ftp.storbinary(f'STOR {complete_path}', file)
-
-
-def load_image(image_url: str) -> Image:
-    response = requests.get(image_url)
-    img = Image.open(BytesIO(response.content))
-    return img
-
-def apply_rotation(img: Image, rotation: int) -> Image:
-    return img.rotate(rotation, expand=True, fillcolor=None)
-
-def apply_crop(img: Image, dh: float, db: float) -> Image:
-    width, height = img.size
-    top = (dh / 100) * height
-    bottom = height - (db / 100) * height
-    return img.crop((0, top, width, bottom))
-
-def apply_filter(img: Image, filter: str) -> Image:
-    if filter == 'NB':
-        return ImageOps.grayscale(img)
-    else:
-        return img
-
-def add_text(
-    img: Image = Image.new('RGB', (100, 100)), 
-    text: str = "Sample Text", 
-    font_name: str = "arial",  # Path to Arial font
-    font_size: int = 20, 
-    x: float = 10, 
-    y: float = 10, 
-    color: str = "FFFFFF",
-    align: Optional[str] = "left"
-) -> Image:
-    
-    font_path = ''
-
-    match font_name:
-        case "arial" :
-            font_path = "/usr/share/fonts/arial.ttf"
-        case "tnr" :
-            font_path = "/usr/share/fonts/TimesNewRoman.ttf"
-        case "helvetica" :
-            font_path = "/usr/share/fonts/Helvetica.ttf"
-        case "verdana" :
-            font_path = "/usr/share/fonts/Verdana.ttf"
-        case "avenir" :
-            font_path = "/usr/share/fonts/AvenirNextCyr-Regular.ttf"
-    try:
-        font = ImageFont.truetype(font_path, font_size)
-    except IOError:
-        print("Font not found. Using default font.")
-        font = ImageFont.load_default()
-
-    draw = ImageDraw.Draw(img)
-    width, height = img.size
-    y = (y / 100) * height
-    x = (x / 100) * width
-    color = "#" + color
-
-    # Diviser le texte en lignes
-    lines = text.split("<br>")
-    line_height = font_size + 5  # Ajouter un espace entre les lignes
-    
-    for i, line in enumerate(lines):
-        draw.text((x, y + i * line_height), line, font=font, fill=color, align=align)
-
-    return img
-
-def process_intercalaire(background_color: str, width: int, height: int, text_blocks: List[Dict], ftp_host: str, ftp_username: str, ftp_password: str):
+def process_intercalaire(result_file: str, background_color: str, width: int, height: int, text_blocks: List[Dict], ftp_host: str, ftp_username: str, ftp_password: str):
     """
     A function to create an image with multiple text blocks and upload it to a server.
     """
@@ -239,11 +37,11 @@ def process_intercalaire(background_color: str, width: int, height: int, text_bl
             )
 
         # Save the image temporarily
-        temp_file_path = f"/tmp/intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        temp_file_path = f"/tmp/intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         img.save(temp_file_path)
 
         # Upload the file to the FTP server
-        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, f"intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, result_file)
 
         # Clean up temporary files
         clean_up_files([temp_file_path])
@@ -261,7 +59,7 @@ def process_intercalaire(background_color: str, width: int, height: int, text_bl
         )
         raise e
 
-def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, params):
+def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, dpi, params, watermark_text):
     """
     A function to download data, process it, and upload it to a server.
     """
@@ -280,12 +78,13 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
         # Transformation de l'image principale
         for i, _ in enumerate(xs):
             try:
-                rotation = rs[i] if i < len(rs) else default_rotation
-                new_image = apply_rotation(image, rotation)
                 
                 top = dhs[i] if i < len(dhs) else default_dh
                 bottom = dbs[i] if i < len(dbs) else default_db
-                new_image = apply_crop(new_image, top, bottom)
+                new_image = apply_crop(image, top, bottom)
+
+                rotation = rs[i] if i < len(rs) else default_rotation
+                new_image = apply_rotation(new_image, rotation)
                 
                 filter_ = cs[i] if i < len(cs) else default_filter
                 new_image = apply_filter(new_image, filter_)
@@ -331,11 +130,20 @@ def process_and_upload(template_url, image_url, result_file, xs, ys, rs, ws, cs,
                     ftp_password=ftp_password,
                     log_message=log_message,
                     log_folder="/error_logs")
+        
+        # Appliquer le filigrane
+        if watermark_text:
+            template = apply_watermark(template, watermark_text)
+        
+        #resize img
+        if result_w : 
+            template = apply_resize_template(template, result_w)
 
         if result_file:
             if os.path.dirname(result_file):
                 os.makedirs(os.path.dirname(result_file), exist_ok=True)
-            template.save(result_file)
+            
+            template.save(result_file, dpi=(dpi, dpi))
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
     
     except Exception as e:
