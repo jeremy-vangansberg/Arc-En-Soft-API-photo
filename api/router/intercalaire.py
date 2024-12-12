@@ -1,8 +1,13 @@
+import logging
 from fastapi import APIRouter, Query, Request
 from typing import Optional
 from celery_worker import celery_app
 from ftp_utils import ftp_security
 from descriptions import description_intercalaire
+
+# Configurer le logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="",
@@ -13,9 +18,9 @@ router = APIRouter(
 def create_intercalaire(
     request: Request,
     result_file: Optional[str] = Query(
-        'exemple/test.jpf',
+        'exemple/test.jpg',
         alias="result_file",
-        description="chemin relatif ou absolue pour enregistrer le résultat. Exemple : 'intercalaire.jpg'."
+        description="Chemin relatif ou absolu pour enregistrer le résultat. Exemple : 'intercalaire.jpg'."
     ),
     ftp__id: Optional[int] = Query(
         1,
@@ -57,7 +62,6 @@ def create_intercalaire(
     c1: Optional[str] = Query(None, alias="c1", description="Filtre pour l'image 1."),
     dh1: Optional[int] = Query(None, alias="dh1", description="Découpe en haut (en %) pour l'image 1."),
     db1: Optional[int] = Query(None, alias="db1", description="Découpe en bas (en %) pour l'image 1."),
-    # Ajoutez jusqu'à x10, y10, etc.
     x2: Optional[int] = Query(None, alias="x2", description="Position horizontale (en %) pour l'image 2."),
     y2: Optional[int] = Query(None, alias="y2", description="Position verticale (en %) pour l'image 2."),
     r2: Optional[int] = Query(None, alias="r2", description="Rotation (en degrés) pour l'image 2."),
@@ -65,12 +69,11 @@ def create_intercalaire(
     c2: Optional[str] = Query(None, alias="c2", description="Filtre pour l'image 2."),
     dh2: Optional[int] = Query(None, alias="dh2", description="Découpe en haut (en %) pour l'image 2."),
     db2: Optional[int] = Query(None, alias="db2", description="Découpe en bas (en %) pour l'image 2.")
-    # Continuez avec les autres paramètres jusqu'à 10 si nécessaire
 ):
-    """
-    Génère une image intercalaire avec des blocs de texte et des images additionnelles.
-    """
+    logger.info("Starting intercalaire creation request.")
+
     # Récupérer les paramètres sous forme de listes
+    logger.debug("Aggregating parameters into lists.")
     xs = [x1, x2]
     ys = [y1, y2]
     rs = [r1, r2]
@@ -86,6 +89,7 @@ def create_intercalaire(
     tys = [ty1, ty2]
 
     # Filtrer les valeurs None
+    logger.debug("Filtering None values from lists.")
     xs = [x for x in xs if x is not None]
     ys = [y for y in ys if y is not None]
     rs = [r for r in rs if r is not None]
@@ -101,9 +105,11 @@ def create_intercalaire(
     tys = [ty for ty in tys if ty is not None]
 
     # Récupération des informations FTP
+    logger.info(f"Fetching FTP credentials for FTP ID: {ftp__id}.")
     FTP_HOST, FTP_USERNAME, FTP_PASSWORD = ftp_security(ftp__id)
 
     # Construction des paramètres
+    logger.debug("Preparing parameters for Celery task.")
     params = {
         "result_file": result_file,
         "background_color": background_color,
@@ -125,6 +131,7 @@ def create_intercalaire(
     }
 
     # Appel de la tâche Celery
+    logger.info("Sending task to Celery worker.")
     task = celery_app.send_task(
         "tasks.process_intercalaire_task",
         args=[
@@ -139,4 +146,5 @@ def create_intercalaire(
         ]
     )
 
+    logger.info(f"Intercalaire processing task started with ID: {task.id}.")
     return {"message": "Intercalaire processing started", "task_id": task.id}
