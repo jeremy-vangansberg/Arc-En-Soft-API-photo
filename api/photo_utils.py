@@ -2,27 +2,25 @@ import requests
 from typing import Optional, List
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
-
 import cv2
-
+import numpy as np
 
 def apply_watermark(
     img: Image,
     text: str,
     font_name: str = "arial",
-    font_size: int = 30,
     color: str = "000000",  # Noir par défaut
     transparency: int = 100,  # De 0 (transparent) à 255 (opaque)
     repeat_count: int = 5,  # Nombre de répétitions du texte sur l'image
 ) -> Image:
     """
     Applique un filigrane sur une image avec des répétitions diagonales.
+    La taille de la police est automatiquement proportionnelle à la taille de l'image.
 
     Args:
         img (Image): L'image sur laquelle appliquer le filigrane.
         text (str): Le texte du filigrane.
         font_name (str): Nom de la police (par défaut Arial).
-        font_size (int): Taille de la police (par défaut 30).
         color (str): Couleur hexadécimale du texte (par défaut noir "000000").
         transparency (int): Transparence du texte (0 transparent, 255 opaque).
         repeat_count (int): Nombre de répétitions du texte en diagonale.
@@ -30,6 +28,7 @@ def apply_watermark(
     Returns:
         Image: L'image avec le filigrane appliqué.
     """
+    # Sélectionner un chemin de police dynamique
     font_path = ''
     match font_name:
         case "arial":
@@ -43,6 +42,13 @@ def apply_watermark(
         case "avenir":
             font_path = "/usr/share/fonts/AvenirNextCyr-Regular.ttf"
 
+    # Obtenir les dimensions de l'image
+    img_width, img_height = img.size
+
+    # Ajuster dynamiquement la taille de la police en fonction de l'image
+    base_font_size = min(img_width, img_height) // 20  # 5% de la plus petite dimension
+    font_size = max(base_font_size, 10)  # S'assurer que la taille de police est raisonnable
+
     try:
         font = ImageFont.truetype(font_path, font_size)
     except IOError:
@@ -55,9 +61,6 @@ def apply_watermark(
 
     # Convertir la couleur hexadécimale en RGBA avec transparence
     color_with_transparency = tuple(int(color[i:i+2], 16) for i in (0, 2, 4)) + (transparency,)
-
-    # Dimensions de l'image
-    img_width, img_height = img.size
 
     # Répartir les filigranes en diagonale
     step_x = img_width // (repeat_count + 1)  # Espacement horizontal entre les filigranes
@@ -75,15 +78,14 @@ def apply_watermark(
     return Image.alpha_composite(img.convert("RGBA"), watermark_layer).convert("RGB")
 
 
+
 def apply_resize_template(result_img, new_width):
     width, height = result_img.size
     new_height = int((new_width / width) * height)
     resized_img = result_img.resize((new_width, new_height))
     return resized_img
 
-import cv2
-import numpy as np
-from PIL import Image
+
 
 def apply_cartoon_filter(pil_img):
     """

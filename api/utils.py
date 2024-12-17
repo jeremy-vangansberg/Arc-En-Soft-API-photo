@@ -98,6 +98,10 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
                 new_image = new_image.resize((new_width, new_height))
 
+                # Appliquer le filigrane
+                if watermark_text:
+                    new_image = apply_watermark(new_image, watermark_text)
+
                 x = int(xs[i] / 100 * template.width) if i < len(xs) else 0
                 y = int(ys[i] / 100 * template.height) if i < len(ys) else 0
                 template.paste(new_image, (x, y))
@@ -133,9 +137,7 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                     log_message=log_message,
                     log_folder="/error_logs")
         
-        # Appliquer le filigrane
-        if watermark_text:
-            template = apply_watermark(template, watermark_text)
+
         
         #resize img
         if result_w : 
