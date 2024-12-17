@@ -229,9 +229,9 @@ def create_image(
         "txs": txs,
         "tys": tys
     }
-    logger.info(f"Fetching FTP credentials for FTP ID: {ftp__id}.")
+    logger.info(f"Fetching FTP credentials for FTP ID: {ftp_id}.")
 
-    FTP_HOST, FTP_URSERNAME, FTP_PASSWORD = ftp_security(ftp__id)
+    FTP_HOST, FTP_URSERNAME, FTP_PASSWORD = ftp_security(ftp_id)
 
     logger.info("Sending task to Celery worker.")
 
