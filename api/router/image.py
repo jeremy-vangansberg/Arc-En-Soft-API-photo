@@ -58,7 +58,7 @@ def create_image(
         description="Résolution de l'image finale en DPI. Exemple : 300."
     ),
     watermark_text: Optional[str] = Query(
-        "watermark",
+        None,
         description="Si défini, applique un filigrane (watermark) sur l'image."
     ),
     result_w: Optional[int] = Query(
