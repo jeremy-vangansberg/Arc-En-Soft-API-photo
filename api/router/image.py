@@ -5,6 +5,7 @@ from ftp_utils import ftp_security
 from descriptions import description_create_image
 from enum import Enum
 import logging
+import datetime
 
 
 router = APIRouter(
@@ -33,7 +34,7 @@ class FilterType(str, Enum):
 @router.get("/create_image/", description=description_create_image)
 def create_image(
     request: Request,
-    ftp__id: Optional[int] = Query(1,
+    ftp_id: Optional[int] = Query(1,
         description="ID du serveur FTP de destination."
     ),
     template_url: str = Query(
@@ -176,7 +177,7 @@ def create_image(
     tx2: Optional[int] = Query(50, alias="tx2", description="Position x (en %) pour le texte 2. Exemple : 50."),
     ty2: Optional[int] = Query(96, alias="ty2", description="Position y (en %) pour le texte 2. Exemple : 5.")
 ):
-    logger.info("Starting image processing request.")
+    logger.info(f"Starting image processing request.{datetime.datetime.now()}")
     logger.info("Aggregating parameters into lists.")
     # Agréger les paramètres en listes
     xs = [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10]

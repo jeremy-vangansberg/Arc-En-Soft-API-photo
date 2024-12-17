@@ -1,8 +1,14 @@
+import logging
+import datetime
 from fastapi import APIRouter, Query, Request
 from typing import Optional
 from celery_worker import celery_app
 from ftp_utils import ftp_security
 from descriptions import description_intercalaire
+
+# Configuration du logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 router = APIRouter(
     prefix="",
@@ -13,71 +19,49 @@ router = APIRouter(
 def create_intercalaire(
     request: Request,
     result_file: Optional[str] = Query(
-        'exemple/test.jpf',
+        'exemple/test.jpg',
         alias="result_file",
-        description="chemin relatif ou absolue pour enregistrer le résultat. Exemple : 'intercalaire.jpg'."
+        description="Chemin relatif ou absolu pour enregistrer le résultat. Exemple : 'intercalaire.jpg'."
     ),
-    ftp__id: Optional[int] = Query(
-        1,
-        description="ID du serveur FTP où l'image sera téléversée. Exemple : 1."
-    ),
+    ftp__id: Optional[int] = Query(1, description="ID du serveur FTP où l'image sera téléversée. Exemple : 1."),
     background_color: str = Query(
-        'FFFFFF',
-        alias="background_color",
-        description="Couleur de l'arrière-plan au format hexadécimal. Exemple : 'FFFFFF' pour blanc."
+        'FFFFFF', alias="background_color", description="Couleur de l'arrière-plan au format hexadécimal."
     ),
-    width: int = Query(
-        800,
-        alias="width",
-        description="Largeur de l'image en pixels. Exemple : 800."
-    ),
-    height: int = Query(
-        600,
-        alias="height",
-        description="Hauteur de l'image en pixels. Exemple : 600."
-    ),
+    width: int = Query(800, alias="width", description="Largeur de l'image en pixels."),
+    height: int = Query(600, alias="height", description="Hauteur de l'image en pixels."),
     # Paramètres des textes
-    t1: Optional[str] = Query(None, alias="t1", description="Texte 1. Exemple : 'Bonjour'."),
-    t2: Optional[str] = Query(None, alias="t2", description="Texte 2. Exemple : 'Hello'."),
-    tx1: Optional[int] = Query(None, alias="tx1", description="Position horizontale (en %) pour le texte 1."),
-    ty1: Optional[int] = Query(None, alias="ty1", description="Position verticale (en %) pour le texte 1."),
+    t1: Optional[str] = Query(None, alias="t1", description="Texte 1."),
+    t2: Optional[str] = Query(None, alias="t2", description="Texte 2."),
+    tx1: Optional[int] = Query(None, alias="tx1", description="Position horizontale pour le texte 1."),
+    ty1: Optional[int] = Query(None, alias="ty1", description="Position verticale pour le texte 1."),
     tf1: Optional[str] = Query('arial', alias="tf1", description="Police pour le texte 1."),
     tc1: Optional[str] = Query('000000', alias="tc1", description="Couleur pour le texte 1."),
     tt1: Optional[int] = Query(20, alias="tt1", description="Taille de la police pour le texte 1."),
-    tx2: Optional[int] = Query(None, alias="tx2", description="Position horizontale (en %) pour le texte 2."),
-    ty2: Optional[int] = Query(None, alias="ty2", description="Position verticale (en %) pour le texte 2."),
+    tx2: Optional[int] = Query(None, alias="tx2", description="Position horizontale pour le texte 2."),
+    ty2: Optional[int] = Query(None, alias="ty2", description="Position verticale pour le texte 2."),
     tf2: Optional[str] = Query('arial', alias="tf2", description="Police pour le texte 2."),
     tc2: Optional[str] = Query('000000', alias="tc2", description="Couleur pour le texte 2."),
     tt2: Optional[int] = Query(20, alias="tt2", description="Taille de la police pour le texte 2."),
     # Paramètres des images additionnelles
-    x1: Optional[int] = Query(None, alias="x1", description="Position horizontale (en %) pour l'image 1."),
-    y1: Optional[int] = Query(None, alias="y1", description="Position verticale (en %) pour l'image 1."),
-    r1: Optional[int] = Query(None, alias="r1", description="Rotation (en degrés) pour l'image 1."),
-    w1: Optional[int] = Query(None, alias="w1", description="Largeur (en %) pour l'image 1."),
+    x1: Optional[int] = Query(None, alias="x1", description="Position horizontale pour l'image 1."),
+    y1: Optional[int] = Query(None, alias="y1", description="Position verticale pour l'image 1."),
+    r1: Optional[int] = Query(None, alias="r1", description="Rotation pour l'image 1."),
+    w1: Optional[int] = Query(None, alias="w1", description="Largeur pour l'image 1."),
     c1: Optional[str] = Query(None, alias="c1", description="Filtre pour l'image 1."),
-    dh1: Optional[int] = Query(None, alias="dh1", description="Découpe en haut (en %) pour l'image 1."),
-    db1: Optional[int] = Query(None, alias="db1", description="Découpe en bas (en %) pour l'image 1."),
-    # Ajoutez jusqu'à x10, y10, etc.
-    x2: Optional[int] = Query(None, alias="x2", description="Position horizontale (en %) pour l'image 2."),
-    y2: Optional[int] = Query(None, alias="y2", description="Position verticale (en %) pour l'image 2."),
-    r2: Optional[int] = Query(None, alias="r2", description="Rotation (en degrés) pour l'image 2."),
-    w2: Optional[int] = Query(None, alias="w2", description="Largeur (en %) pour l'image 2."),
-    c2: Optional[str] = Query(None, alias="c2", description="Filtre pour l'image 2."),
-    dh2: Optional[int] = Query(None, alias="dh2", description="Découpe en haut (en %) pour l'image 2."),
-    db2: Optional[int] = Query(None, alias="db2", description="Découpe en bas (en %) pour l'image 2.")
-    # Continuez avec les autres paramètres jusqu'à 10 si nécessaire
+    dh1: Optional[int] = Query(None, alias="dh1", description="Découpe en haut pour l'image 1."),
+    db1: Optional[int] = Query(None, alias="db1", description="Découpe en bas pour l'image 1."),
 ):
-    """
-    Génère une image intercalaire avec des blocs de texte et des images additionnelles.
-    """
-    # Récupérer les paramètres sous forme de listes
-    xs = [x1, x2]
-    ys = [y1, y2]
-    rs = [r1, r2]
-    ws = [w1, w2]
-    cs = [c1, c2]
-    dhs = [dh1, dh2]
-    dbs = [db1, db2]
+    logger.info(f"Starting intercalaire generation request at {datetime.datetime.now()}")
+    
+    # Agréger les paramètres en listes
+    logger.info("Aggregating parameters into lists.")
+    xs = [x1]
+    ys = [y1]
+    rs = [r1]
+    ws = [w1]
+    cs = [c1]
+    dhs = [dh1]
+    dbs = [db1]
     ts = [t1, t2]
     tfs = [tf1, tf2]
     tcs = [tc1, tc2]
@@ -86,6 +70,7 @@ def create_intercalaire(
     tys = [ty1, ty2]
 
     # Filtrer les valeurs None
+    logger.info("Filtering None values from parameter lists.")
     xs = [x for x in xs if x is not None]
     ys = [y for y in ys if y is not None]
     rs = [r for r in rs if r is not None]
@@ -101,9 +86,11 @@ def create_intercalaire(
     tys = [ty for ty in tys if ty is not None]
 
     # Récupération des informations FTP
+    logger.info(f"Fetching FTP credentials for FTP ID: {ftp__id}")
     FTP_HOST, FTP_USERNAME, FTP_PASSWORD = ftp_security(ftp__id)
 
     # Construction des paramètres
+    logger.info("Building task parameters.")
     params = {
         "result_file": result_file,
         "background_color": background_color,
@@ -124,7 +111,8 @@ def create_intercalaire(
         "tys": tys
     }
 
-    # Appel de la tâche Celery
+    # Envoi de la tâche Celery
+    logger.info("Sending task to Celery worker.")
     task = celery_app.send_task(
         "tasks.process_intercalaire_task",
         args=[
@@ -138,5 +126,7 @@ def create_intercalaire(
             FTP_PASSWORD
         ]
     )
+
+    logger.info(f"Intercalaire processing task started with ID: {task.id}.")
 
     return {"message": "Intercalaire processing started", "task_id": task.id}
