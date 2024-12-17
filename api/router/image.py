@@ -89,7 +89,7 @@ def create_image(
     c1: FilterType = Query(
         None,
         alias="c1",
-        description="Filtre appliqué à la première image. Exemple : 'NB' pour noir et blanc."
+        description="Filtre appliqué à la première image. Exemple : 'nb' pour noir et blanc."
     ),
     db1: Optional[int] = Query(
         None,

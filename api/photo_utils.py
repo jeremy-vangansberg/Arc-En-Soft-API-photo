@@ -81,33 +81,45 @@ def apply_resize_template(result_img, new_width):
     resized_img = result_img.resize((new_width, new_height))
     return resized_img
 
-def apply_cartoon_filter(image_path):
+import cv2
+import numpy as np
+from PIL import Image
 
+def apply_cartoon_filter(pil_img):
+    """
+    Applique un filtre cartoon à une image PIL.
+    """
+    # Log du format de l'image
+    print(f"Type de l'image reçue : {type(pil_img)}")
+    
+    # Convertir PIL.Image en tableau NumPy
+    img = np.array(pil_img)
+    print(f"Shape de l'image convertie en NumPy : {img.shape}")
+    
+    if img.shape[-1] == 3:  # RGB image
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    else:
+        raise ValueError("L'image d'entrée n'est pas au format RGB.")
 
-    # Lire l'image
-    img = cv2.imread(image_path)
-
-    # Appliquer une transformation en niveau de gris
+    # Transformation en niveaux de gris
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Appliquer un flou médian pour réduire le bruit
     gray = cv2.medianBlur(gray, 5)
 
-    # Détection des contours en utilisant l'algorithme de Canny
-    edges = cv2.adaptiveThreshold(cv2.medianBlur(gray, 7), 255,
-                                  cv2.ADAPTIVE_THRESH_MEAN_C,
+    # Détection des contours
+    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
                                   cv2.THRESH_BINARY, 9, 7)
 
-    # Réduire la couleur
+    # Réduction des couleurs
     color = cv2.bilateralFilter(img, 9, 300, 300)
 
-    # Fusionner les contours et l'image en couleur réduite
+    # Fusionner les contours et l'image colorée
     cartoon = cv2.bitwise_and(color, color, mask=edges)
-    
-    # Convertir l'image de BGR à RGB pour l'affichage avec matplotlib
+
+    # Convertir de BGR à RGB pour PIL.Image
     cartoon_rgb = cv2.cvtColor(cartoon, cv2.COLOR_BGR2RGB)
-    
-    return cartoon_rgb
+    print("Filtre cartoon appliqué avec succès.")
+    return Image.fromarray(cartoon_rgb)
+
 
 def load_image(image_url: str) -> Image:
     response = requests.get(image_url)
@@ -124,14 +136,20 @@ def apply_crop(img: Image, dh: float, db: float) -> Image:
     return img.crop((0, top, width, bottom))
 
 def apply_filter(img: Image, _filter: str) -> Image:
+    """
+    Applique un filtre spécifique à une image PIL.
+    """
+    print(f"Filtre demandé : {_filter}, Type de l'image : {type(img)}")
 
     match _filter:
         case 'nb':
             return ImageOps.grayscale(img)
-        case "cartoon" : 
+        case 'cartoon':
             return apply_cartoon_filter(img)
-        case _ : 
+        case _:
+            print(f"Filtre inconnu : {_filter}. Aucun filtre appliqué.")
             return img
+
 
 def add_text(
     img: Image = Image.new('RGB', (100, 100)), 

@@ -87,7 +87,9 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 new_image = apply_rotation(new_image, rotation)
                 
                 filter_ = cs[i] if i < len(cs) else default_filter
+                print(f"Étape {i}: Filtre appliqué : {filter_}, Type avant filtre : {type(new_image)}")
                 new_image = apply_filter(new_image, filter_)
+                print(f"Étape {i}: Type après filtre : {type(new_image)}")
                 
                 new_width = int((ws[i] / 100) * new_image.width) if i < len(ws) else int((default_width / 100) * new_image.width)
                 new_height = int(new_width * new_image.height / new_image.width)
