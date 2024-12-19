@@ -69,11 +69,11 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
         template = load_image(template_url)
         image = load_image(image_url)
         
-        default_rotation = rs[0] if rs else 0
-        default_width = ws[0] if ws else 100
-        default_filter = cs[0] if cs else 'none'
-        default_dh = dhs[0] if dhs else 0
-        default_db = dbs[0] if dbs else 0
+        default_rotation = 0
+        default_width = 100
+        default_filter = 'none'
+        default_dh = 0
+        default_db = 0
 
         # Transformation de l'image principale
         for i, _ in enumerate(xs):
