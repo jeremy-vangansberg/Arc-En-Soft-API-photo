@@ -129,6 +129,7 @@ def load_image(image_url: str) -> Image:
     return img
 
 def apply_rotation(img: Image, rotation: int) -> Image:
+    print(f'rotation {rotation} appliquée')
     return img.rotate(rotation, expand=True, fillcolor=None)
 
 def apply_crop(img: Image, dh: float, db: float) -> Image:

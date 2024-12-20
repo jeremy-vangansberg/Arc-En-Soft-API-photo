@@ -180,6 +180,8 @@ def create_image(
     logger.info(f"Starting image processing request.{datetime.datetime.now()}")
     logger.info("Aggregating parameters into lists.")
     # Agréger les paramètres en listes
+    # xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys = [], [], [], [], [], [], [], [], [], [], [], [], []
+
     xs = [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10]
     ys = [y1, y2, y3, y4, y5, y6, y7, y8, y9, y10]
     rs = [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10]
@@ -193,21 +195,7 @@ def create_image(
     tts = [tt1, tt2]
     txs = [tx1, tx2]
     tys = [ty1, ty2]
-    
-    # Filtrer les valeurs None
-    xs = [x for x in xs if x is not None]
-    ys = [y for y in ys if y is not None]
-    rs = [r for r in rs if r is not None]
-    ws = [w for w in ws if w is not None]
-    cs = [c for c in cs if c is not None]
-    dhs = [dh for dh in dhs if dh is not None]
-    dbs = [db for db in dbs if db is not None]
-    ts = [t for t in ts if t is not None]
-    tfs = [tf for tf in tfs if tf is not None]
-    tcs = [tc for tc in tcs if tc is not None]
-    tts = [tt for tt in tts if tt is not None]
-    txs = [tx for tx in txs if tx is not None]
-    tys = [ty for ty in tys if ty is not None]
+
 
     # Paramètres de la requête
     params = {
