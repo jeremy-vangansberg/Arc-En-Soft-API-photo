@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, HTTPException
 from typing import Optional
 from celery_worker import celery_app
+
 from ftp_utils import ftp_security
 from descriptions import description_create_image
 from enum import Enum
@@ -255,3 +256,4 @@ def create_image(
     logger.info(f"Image processing task started with ID: {task.id}.")
     
     return {"message": "Image processing started", "task_id": task.id}
+

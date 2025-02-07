@@ -105,7 +105,7 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
                 # Appliquer le redimensionnement
                 width_factor = get_value_with_default(ws, i, default_width_percentage)
-                new_width = int((width_factor / 100) * new_image.width)
+                new_width = int((width_factor / 100) * template.width)
                 new_height = int(new_width * new_image.height / new_image.width)
                 if new_width <= 0 or new_height <= 0:
                     raise ValueError(f"Dimensions invalides à l'étape {i} : width={new_width}, height={new_height}")
