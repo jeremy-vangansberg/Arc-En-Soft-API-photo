@@ -180,9 +180,8 @@ def create_image(
 ):
     logger.info(f"Starting image processing request.{datetime.datetime.now()}")
     logger.info("Aggregating parameters into lists.")
-    # Agréger les paramètres en listes
-    # xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys = [], [], [], [], [], [], [], [], [], [], [], [], []
 
+    # Créer les listes brutes
     xs = [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10]
     ys = [y1, y2, y3, y4, y5, y6, y7, y8, y9, y10]
     rs = [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10]
@@ -197,34 +196,62 @@ def create_image(
     txs = [tx1, tx2]
     tys = [ty1, ty2]
 
+    # Trouver les indices valides basés sur xs (position x requise)
+    valid_indices = [i for i, x in enumerate(xs) if x is not None]
+    if not valid_indices:
+        raise HTTPException(
+            status_code=400,
+            detail="Au moins une position x (x1, x2, etc.) doit être spécifiée"
+        )
+
+    # Nettoyer les listes pour ne garder que les éléments avec un x valide
+    xs_clean = [xs[i] for i in valid_indices]
+    ys_clean = [ys[i] for i in valid_indices]
+    rs_clean = [rs[i] for i in valid_indices]
+    ws_clean = [ws[i] for i in valid_indices]
+    cs_clean = [cs[i] for i in valid_indices]
+    dhs_clean = [dhs[i] for i in valid_indices]
+    dbs_clean = [dbs[i] for i in valid_indices]
+
+    # Nettoyer les listes de texte (garder uniquement ceux avec du texte)
+    valid_text_indices = [i for i, t in enumerate(ts) if t is not None]
+    ts_clean = [ts[i] for i in valid_text_indices]
+    tfs_clean = [tfs[i] for i in valid_text_indices]
+    tcs_clean = [tcs[i] for i in valid_text_indices]
+    tts_clean = [tts[i] for i in valid_text_indices]
+    txs_clean = [txs[i] for i in valid_text_indices]
+    tys_clean = [tys[i] for i in valid_text_indices]
+
+    logger.info(f"Nombre d'images à traiter : {len(xs_clean)}")
+    logger.info(f"Nombre de textes à ajouter : {len(ts_clean)}")
 
     # Paramètres de la requête
     params = {
         "template_url": template_url,
         "image_url": image_url,
         "result_file": result_file,
-        "result_w":result_w,
-        "xs": xs,
-        "ys": ys,
-        "rs": rs,
-        "ws": ws,
-        "cs": cs,
-        "dhs": dhs,
-        "dbs": dbs,
-        "ts": ts,
-        "tfs": tfs,
-        "tcs": tcs,
-        "tts": tts,
-        "txs": txs,
-        "tys": tys
+        "result_w": result_w,
+        "xs": xs_clean,
+        "ys": ys_clean,
+        "rs": rs_clean,
+        "ws": ws_clean,
+        "cs": cs_clean,
+        "dhs": dhs_clean,
+        "dbs": dbs_clean,
+        "ts": ts_clean,
+        "tfs": tfs_clean,
+        "tcs": tcs_clean,
+        "tts": tts_clean,
+        "txs": txs_clean,
+        "tys": tys_clean
     }
-    logger.info(f"Fetching FTP credentials for FTP ID: {ftp_id}.")
 
+    logger.info(f"Fetching FTP credentials for FTP ID: {ftp_id}.")
     FTP_HOST, FTP_URSERNAME, FTP_PASSWORD = ftp_security(ftp_id)
 
     logger.info("Sending task to Celery worker.")
 
-    # Appeler la tâche Celery
+    # Appeler la tâche Celery avec les listes nettoyées
     task = celery_app.send_task(
         "tasks.process_and_upload_task",
         args=[
@@ -232,28 +259,28 @@ def create_image(
             image_url,
             result_file,
             result_w,
-            xs,
-            ys,
-            rs,
-            ws,
-            cs,
-            dhs,
-            dbs,
-            ts,
-            tfs,
-            tcs,
-            tts,
-            txs,
-            tys,
+            xs_clean,
+            ys_clean,
+            rs_clean,
+            ws_clean,
+            cs_clean,
+            dhs_clean,
+            dbs_clean,
+            ts_clean,
+            tfs_clean,
+            tcs_clean,
+            tts_clean,
+            txs_clean,
+            tys_clean,
             FTP_HOST, 
             FTP_URSERNAME, 
             FTP_PASSWORD,
-            dpi, 
+            dpi,
             params,
             watermark_text
         ]
     )
+
     logger.info(f"Image processing task started with ID: {task.id}.")
-    
     return {"message": "Image processing started", "task_id": task.id}
 

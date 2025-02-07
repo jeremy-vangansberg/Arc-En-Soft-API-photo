@@ -66,9 +66,18 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
     log_request_to_ftp(params, ftp_host, ftp_username, ftp_password)
 
     try:
+        print("=== DÉBUT DU PROCESSUS ===")
         # Charger le modèle et l'image
         template = load_image(template_url)
+        print(f"Template chargé, dimensions initiales: {template.size}")
         image = load_image(image_url)
+        print(f"Image source chargée, dimensions: {image.size}")
+
+        # Redimensionner le template final en premier
+        if result_w:
+            print(f"Redimensionnement du template à {result_w}px de large...")
+            template = apply_resize_template(template, result_w)
+            print(f"Template redimensionné, nouvelles dimensions: {template.size}")
 
         # Valeurs par défaut
         default_rotation = 0
@@ -84,8 +93,10 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
         # Transformation de l'image principale
         for i in range(len(xs)):
             try:
+                print(f"\n=== TRAITEMENT IMAGE {i+1} ===")
                 # Copie indépendante de l'image originale
                 new_image = image.copy()
+                print(f"Dimensions du template actuel: {template.size}")
 
                 # Appliquer le rognage
                 top = get_value_with_default(dhs, i, default_dh)
@@ -105,11 +116,20 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
                 # Appliquer le redimensionnement
                 width_factor = get_value_with_default(ws, i, default_width_percentage)
+                print(f"Facteur de redimensionnement: {width_factor}%")
+                # Calcul de la nouvelle largeur en pourcentage du template
                 new_width = int((width_factor / 100) * template.width)
-                new_height = int(new_width * new_image.height / new_image.width)
+                print(f"Nouvelle largeur calculée: {new_width}px (template width: {template.width}px)")
+                # Calcul de la nouvelle hauteur en conservant le ratio
+                aspect_ratio = new_image.width / new_image.height
+                new_height = int(new_width / aspect_ratio)
+                print(f"Nouvelle hauteur calculée: {new_height}px (ratio: {aspect_ratio})")
+
+                # Vérification que les dimensions sont valides
                 if new_width <= 0 or new_height <= 0:
                     raise ValueError(f"Dimensions invalides à l'étape {i} : width={new_width}, height={new_height}")
 
+                # Redimensionnement de l'image
                 new_image = new_image.resize((new_width, new_height))
                 print(f"Étape {i}: Après redimensionnement : {new_image.size}")
 
@@ -155,10 +175,6 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
                 raise e
 
-        # Redimensionner le template final
-        if result_w:
-            template = apply_resize_template(template, result_w)
-            print(f"Template redimensionné à la largeur {result_w}")
 
         # Sauvegarder et uploader le fichier
         if result_file:

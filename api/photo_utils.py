@@ -80,9 +80,23 @@ def apply_watermark(
 
 
 def apply_resize_template(result_img, new_width):
+    """
+    Redimensionne une image en conservant ses proportions.
+    
+    Args:
+        result_img (Image): L'image à redimensionner
+        new_width (int): La nouvelle largeur souhaitée
+        
+    Returns:
+        Image: L'image redimensionnée
+    """
     width, height = result_img.size
-    new_height = int((new_width / width) * height)
-    resized_img = result_img.resize((new_width, new_height))
+    # Calcul du ratio d'aspect original
+    aspect_ratio = width / height
+    # Calcul de la nouvelle hauteur en préservant le ratio
+    new_height = int(new_width / aspect_ratio)
+    # Redimensionnement avec les nouvelles dimensions
+    resized_img = result_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
     return resized_img
 
 
