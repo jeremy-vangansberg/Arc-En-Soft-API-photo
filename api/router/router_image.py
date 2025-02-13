@@ -165,18 +165,36 @@ def create_image(
     c10: FilterType = Query(None, alias="c10"),
     db10: Optional[int] = Query(None, alias="db10"),
     dh10: Optional[int] = Query(None, alias="dh10"),
-    t1: Optional[str] = Query(None, alias="t1", description="Texte 1 à ajouter. Exemple : 'Bonjour'."),
-    tx1: Optional[int] = Query(1, alias="tx1", description="Position x (en %) pour le texte 1. Exemple : 5."),
-    ty1: Optional[int] = Query(96, alias="ty1", description="Position y (en %) pour le texte 1. Exemple : 5."),
-    tf1: FontType = Query(None, alias="tf1", description="Police utilisée pour le texte 1. fonts disponible : arial, avenir, helvetica, verdana, tnr, roboto."),
-    tc1: Optional[str] = Query('000000', alias="tc1", description="Couleur du texte 1 en format hexadécimal. Exemple : '000000'."),
-    tt1: Optional[int] = Query(10, alias="tt1", description="Taille du texte 1 en points. Exemple : 10."),
-    t2: Optional[str] = Query(None, alias="t2", description="Texte 2 à ajouter. Exemple : 'Bonjour le monde'."),
-    tf2: FontType = Query(None, alias="tf2", description="Police utilisée pour le texte 2. fonts disponible : arial, avenir, helvetica, verdana, tnr, roboto."),
-    tc2: Optional[str] = Query('000000', alias="tc2", description="Couleur du texte 2 en format hexadécimal. Exemple : 'FFFFFF'."),
-    tt2: Optional[int] = Query(10, alias="tt2", description="Taille du texte 2 en points. Exemple : 15."),
-    tx2: Optional[int] = Query(50, alias="tx2", description="Position x (en %) pour le texte 2. Exemple : 50."),
-    ty2: Optional[int] = Query(96, alias="ty2", description="Position y (en %) pour le texte 2. Exemple : 5.")
+    texts: list[str] = Query(
+        ["texte1", "texte2"],
+        alias="texts",
+        description="Liste des textes à ajouter. Exemple : ['Bonjour', 'Monde']"
+    ),
+    text_x_positions: list[int] = Query(
+        [1, 50],
+        alias="text_x_positions",
+        description="Liste des positions x (en %) pour les textes. Exemple : [5, 50]"
+    ),
+    text_y_positions: list[int] = Query(
+        [96, 96],
+        alias="text_y_positions",
+        description="Liste des positions y (en %) pour les textes. Exemple : [5, 5]"
+    ),
+    text_fonts: list[FontType] = Query(
+        ['arial', 'arial'],
+        alias="text_fonts",
+        description="Liste des polices utilisées pour les textes. Fonts disponibles : arial, avenir, helvetica, verdana, tnr, roboto."
+    ),
+    text_colors: list[str] = Query(
+        ['000000', '000000'],
+        alias="text_colors",
+        description="Liste des couleurs des textes en format hexadécimal. Exemple : ['000000', 'FFFFFF']"
+    ),
+    text_sizes: list[int] = Query(
+        [10, 10],
+        alias="text_sizes",
+        description="Liste des tailles des textes en points. Exemple : [10, 15]"
+    ),
 ):
     logger.info(f"Starting image processing request.{datetime.datetime.now()}")
     logger.info("Aggregating parameters into lists.")
@@ -189,12 +207,6 @@ def create_image(
     cs = [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10]
     dhs = [dh1, dh2, dh3, dh4, dh5, dh6, dh7, dh8, dh9, dh10]
     dbs = [db1, db2, db3, db4, db5, db6, db7, db8, db9, db10]
-    ts = [t1, t2]
-    tfs = [tf1, tf2]
-    tcs = [tc1, tc2]
-    tts = [tt1, tt2]
-    txs = [tx1, tx2]
-    tys = [ty1, ty2]
 
     # Trouver les indices valides basés sur xs (position x requise)
     valid_indices = [i for i, x in enumerate(xs) if x is not None]
@@ -213,14 +225,62 @@ def create_image(
     dhs_clean = [dhs[i] for i in valid_indices]
     dbs_clean = [dbs[i] for i in valid_indices]
 
-    # Nettoyer les listes de texte (garder uniquement ceux avec du texte)
-    valid_text_indices = [i for i, t in enumerate(ts) if t is not None]
-    ts_clean = [ts[i] for i in valid_text_indices]
-    tfs_clean = [tfs[i] for i in valid_text_indices]
-    tcs_clean = [tcs[i] for i in valid_text_indices]
-    tts_clean = [tts[i] for i in valid_text_indices]
-    txs_clean = [txs[i] for i in valid_text_indices]
-    tys_clean = [tys[i] for i in valid_text_indices]
+    # Traitement des paramètres de texte
+    ts_clean = [t for t in texts if t is not None] if texts else []
+    
+    # Si nous avons des textes, nous devons nous assurer que tous les autres paramètres sont valides
+    if ts_clean:
+        # Vérifier et nettoyer les positions x et y
+        txs_clean = text_x_positions[:len(ts_clean)] if text_x_positions else [1] * len(ts_clean)
+        tys_clean = text_y_positions[:len(ts_clean)] if text_y_positions else [96] * len(ts_clean)
+        
+        # Valider les positions x et y
+        if not all(0 <= x <= 100 for x in txs_clean):
+            raise HTTPException(
+                status_code=400,
+                detail="Les positions x doivent être comprises entre 0 et 100"
+            )
+        if not all(0 <= y <= 100 for y in tys_clean):
+            raise HTTPException(
+                status_code=400,
+                detail="Les positions y doivent être comprises entre 0 et 100"
+            )
+        
+        # Vérifier et nettoyer les polices
+        tfs_clean = text_fonts[:len(ts_clean)] if text_fonts else [FontType.arial] * len(ts_clean)
+        
+        # Vérifier et nettoyer les couleurs et tailles
+        tcs_clean = text_colors[:len(ts_clean)] if text_colors else ['000000'] * len(ts_clean)
+        tts_clean = text_sizes[:len(ts_clean)] if text_sizes else [10] * len(ts_clean)
+        
+        # Valider les tailles
+        if not all(0 < size <= 100 for size in tts_clean):
+            raise HTTPException(
+                status_code=400,
+                detail="Les tailles de texte doivent être comprises entre 1 et 100"
+            )
+        
+        # Vérifier que toutes les listes ont la même longueur
+        text_lists = [ts_clean, txs_clean, tys_clean, tfs_clean, tcs_clean, tts_clean]
+        if not all(len(lst) == len(ts_clean) for lst in text_lists):
+            raise HTTPException(
+                status_code=400,
+                detail="Toutes les listes de paramètres de texte doivent avoir la même longueur"
+            )
+            
+        # Valider les couleurs hexadécimales
+        if not all(len(color) == 6 and all(c in '0123456789ABCDEFabcdef' for c in color) for color in tcs_clean):
+            raise HTTPException(
+                status_code=400,
+                detail="Les couleurs doivent être au format hexadécimal valide (6 caractères)"
+            )
+    else:
+        # Si pas de textes, initialiser toutes les listes comme vides
+        txs_clean = []
+        tys_clean = []
+        tfs_clean = []
+        tcs_clean = []
+        tts_clean = []
 
     logger.info(f"Nombre d'images à traiter : {len(xs_clean)}")
     logger.info(f"Nombre de textes à ajouter : {len(ts_clean)}")

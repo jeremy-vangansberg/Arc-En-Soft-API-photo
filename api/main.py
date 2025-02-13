@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from router import image_router, intercalaire_router, celery_router
+from router import image_router, celery_router
 from celery_worker import celery_app
 
 description = """
@@ -10,5 +10,4 @@ L'API permet de traiter et de personnaliser des images en utilisant différents 
 
 app = FastAPI(description=description)
 app.include_router(image_router)
-app.include_router(intercalaire_router)
 app.include_router(celery_router)
