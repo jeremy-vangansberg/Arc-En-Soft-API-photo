@@ -1,3 +1,26 @@
+{
+    # Désactiver l'HTTPS automatique car géré par Easypanel
+    auto_https off
+}
+
 :80 {
-  reverse_proxy photo_api:80
+    # Reverse proxy vers l'API FastAPI
+    reverse_proxy photo_api:80 {
+        # Gestion des headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Configuration des logs
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+
+    # Gestion des erreurs
+    handle_errors {
+        respond "{err.status_code} {err.status_text}" {err.status_code}
+    }
 }

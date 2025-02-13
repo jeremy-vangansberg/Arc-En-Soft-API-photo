@@ -27,3 +27,6 @@ def mock_celery_app():
     """Fixture pour mocker l'application Celery"""
     with patch.object(celery_app, 'control') as mock_app_control:
         yield mock_app_control 
+
+
+

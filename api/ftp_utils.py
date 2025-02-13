@@ -58,22 +58,29 @@ def ftp_security(ftp__id):
 
 def ensure_ftp_path(ftp, path):
     """
-    Crée récursivement le chemin sur le serveur FTP si nécessaire.
+    Navigue vers le chemin spécifié sur le serveur FTP.
+    Le chemin peut être absolu ou relatif.
+    Les dossiers doivent exister au préalable.
     """
-    path = path.lstrip('/')  # Supprime le slash initial pour éviter les chemins absolus
-    directories = path.split('/')
+    # Gestion des chemins absolus et relatifs
+    if path.startswith('/'):
+        # Pour un chemin absolu, on commence par la racine
+        ftp.cwd('/')
+        # On retire le premier slash pour le split
+        path = path[1:]
     
-    current_path = ''
+    # Navigation dans l'arborescence
+    directories = path.split('/')
     for directory in directories:
         if directory:  # Ignore les chaînes vides
-            current_path += directory
             try:
-                ftp.cwd(current_path)  # Tente de naviguer dans le dossier
-                print(f"Navigated to: {current_path}")  # Debugging message
-            except Exception:
-                ftp.mkd(current_path)  # Crée le dossier s'il n'existe pas
-                ftp.cwd(current_path)  # Navigue dans le dossier nouvellement créé
-                print(f"Created and navigated to: {current_path}")  # Debugging message
+                ftp.cwd(directory)
+                logger.debug(f"Navigated to: {directory}")
+            except Exception as e:
+                logger.error(f"Failed to navigate to directory {directory}: {str(e)}")
+                raise
+
+                
 def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
     """
     Enregistre les paramètres de la requête dans un fichier texte et téléverse sur le serveur FTP.
