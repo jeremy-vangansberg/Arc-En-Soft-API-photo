@@ -4,9 +4,9 @@ description_create_image = """
 Cet endpoint déclenche le traitement de l'image avec les paramètres spécifiés. Voici les principales fonctionnalités :
 - **Ajout d'une image personnalisée** sur un modèle (template).
 - **Transformation de l'image** avec rognage, rotation, redimensionnement, et filtres (par exemple : noir et blanc).
-- **Ajout de textes personnalisés** (position, taille, couleur, police).
+- **Ajout de textes personnalisés** (position, taille, couleur, police) avec support pour un nombre illimité de textes.
 - **Ajout facultatif d'un filigrane** (watermark) sur l'image.
-- **Téléchargement de l'image finale** sur un serveur FTP.
+- **Téléchargement de l'image finale** sur un serveur FTP avec support des chemins absolus.
 
 ---
 
@@ -14,10 +14,10 @@ Cet endpoint déclenche le traitement de l'image avec les paramètres spécifié
 
 | **Paramètre**          | **Description**                                                                                     | **Exemple**                                         |
 |-------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|
-| `ftp_id` (facultatif)   | ID du serveur FTP où l'image finale sera téléversée.                                               | `ftp.example.com`                                   |
+| `ftp_id` (facultatif)   | ID du serveur FTP où l'image finale sera téléversée.                                               | `1`                                                 |
 | `template_url`          | URL de l'image modèle utilisée comme fond.                                                         | `https://example.com/template.jpg`                 |
 | `image_url`             | URL de l'image principale à ajouter.                                                              | `https://example.com/image.jpg`                    |
-| `result_file` (facultatif) | Nom du fichier final généré.                                                                       | `output.jpg`                                        |
+| `result_file` (facultatif) | Chemin relatif ou absolu du fichier final sur le FTP.                                             | `output.jpg` ou `/dossier/output.jpg`              |
 | `dpi` (facultatif)      | Résolution de l'image finale en DPI.                                                              | `300`                                              |
 | `watermark_text` (facultatif) | Texte du filigrane à ajouter sur l'image.                                                      | `Confidential`                                      |
 | `result_w` (facultatif) | Largeur en pixels de l'image finale, avec conservation du ratio.                                   | `800`                                              |
@@ -35,38 +35,77 @@ Cet endpoint déclenche le traitement de l'image avec les paramètres spécifié
 4. **Rognage** (facultatif) :
    - `dh1`, `db1`, ..., `dh10`, `db10` : Pourcentage de découpe en haut et en bas de l'image.
 5. **Filtres** (facultatif) :
-   - `c1`, ..., `c10` : Filtres appliqués (par exemple : `NB` pour noir et blanc).
+   - `c1`, ..., `c10` : Filtres appliqués (par exemple : `nb` pour noir et blanc, `cartoon` pour effet cartoon).
 
 ---
 
-#### **Options pour le Texte**
+#### **Options pour le Texte (Nouveau Format)**
 
-- **Texte 1** (facultatif) : 
-  - `t1`, `tx1`, `ty1`, `tf1`, `tc1`, `tt1` : Contenu, position, police, couleur et taille du texte.
-- **Texte 2** (facultatif) :
-  - `t2`, `tx2`, `ty2`, `tf2`, `tc2`, `tt2` : Similaire pour un second texte.
+Les textes sont maintenant gérés sous forme de listes parallèles, permettant d'ajouter un nombre illimité de textes :
+
+| **Paramètre**          | **Description**                                                                                     | **Exemple**                                         |
+|-------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| `texts`                | Liste des textes à ajouter                                                                         | `texts=Bonjour&texts=Monde`                        |
+| `text_x_positions`     | Liste des positions x (en %) pour chaque texte                                                     | `text_x_positions=10&text_x_positions=50`          |
+| `text_y_positions`     | Liste des positions y (en %) pour chaque texte                                                     | `text_y_positions=90&text_y_positions=90`          |
+| `text_fonts`           | Liste des polices pour chaque texte (arial, avenir, helvetica, verdana, tnr, roboto)              | `text_fonts=arial&text_fonts=helvetica`            |
+| `text_colors`          | Liste des couleurs en hexadécimal pour chaque texte                                               | `text_colors=000000&text_colors=FF0000`           |
+| `text_sizes`           | Liste des tailles en points pour chaque texte                                                      | `text_sizes=12&text_sizes=24`                      |
+
+**Notes importantes sur les textes :**
+- Toutes les listes de paramètres de texte doivent avoir la même longueur
+- Les positions x et y sont en pourcentage (0-100)
+- Les tailles de texte sont en points (1-100)
+- Les couleurs doivent être en format hexadécimal (6 caractères)
+- Si certains paramètres sont omis, des valeurs par défaut sont utilisées
+- Pour créer une liste, répétez le même paramètre avec des valeurs différentes
 
 ---
 
-#### **Exemple d’Utilisation**
+#### **Exemple d'Utilisation**
 
 **Requête HTTP :**
 ```http
 GET /create_image/
 ?template_url=https://example.com/template.jpg
 &image_url=https://example.com/image.jpg
-&result_file=final.jpg
+&result_file=/dossier/final.jpg
 &dpi=300
 &watermark_text=Confidential
 &x1=10&y1=10&w1=50
-&t1=Hello World&tx1=50&ty1=90&tf1=arial&tc1=000000&tt1=20
+&texts=Bonjour
+&texts=Monde
+&text_x_positions=50
+&text_x_positions=70
+&text_y_positions=90
+&text_y_positions=90
+&text_fonts=arial
+&text_fonts=helvetica
+&text_colors=000000
+&text_colors=FF0000
+&text_sizes=20
+&text_sizes=24
 ```
 
 **Explication :**
-1. Charge le modèle et une image depuis leurs URLs respectives.
-2. Ajoute un texte "Hello World" en bas de l'image.
-3. Applique un filigrane en diagonale avec le texte "Confidential".
-4. Télécharge le fichier final sur le serveur FTP."""
+1. Charge le modèle et une image depuis leurs URLs respectives
+2. Positionne l'image à 10% des bords avec une largeur de 50%
+3. Ajoute deux textes en répétant chaque paramètre :
+   - Premier texte : "Bonjour" en noir, police Arial, taille 20, position (50%, 90%)
+   - Deuxième texte : "Monde" en rouge, police Helvetica, taille 24, position (70%, 90%)
+4. Applique un filigrane "Confidential"
+5. Sauvegarde le résultat dans `/dossier/final.jpg` sur le FTP
+
+---
+
+#### **Gestion des Erreurs**
+
+L'API effectue plusieurs validations :
+- Vérification des positions (0-100%)
+- Validation des tailles de texte (1-100)
+- Validation des couleurs hexadécimales
+- Vérification de la cohérence des listes de paramètres de texte
+- Validation des chemins FTP"""
 
 
 description_intercalaire = """
@@ -106,7 +145,7 @@ Répétez ces paramètres pour les blocs de texte supplémentaires (jusqu'à 5 b
 
 ---
 
-#### **Exemple d’Utilisation**
+#### **Exemple d'Utilisation**
 
 **Requête HTTP :**
 ```http
