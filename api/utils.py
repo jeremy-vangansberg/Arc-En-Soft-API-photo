@@ -67,17 +67,20 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
     try:
         print("=== DÉBUT DU PROCESSUS ===")
-        # Charger le modèle et l'image
-        template = load_image(template_url)
-        print(f"Template chargé, dimensions initiales: {template.size}")
-        image = load_image(image_url)
-        print(f"Image source chargée, dimensions: {image.size}")
+        # Charger le template et les images
+        template = load_image(template_url, is_template=True)
+        print(f"Template chargé, dimensions: {template.size}")
+        
+        images = load_image(image_url)
+        if not isinstance(images, list):
+            images = [images]
+        print(f"Images source chargées, nombre: {len(images)}")
 
         # Redimensionner le template final en premier
         if result_w:
             print(f"Redimensionnement du template à {result_w}px de large...")
             template = apply_resize_template(template, result_w)
-            print(f"Template redimensionné, nouvelles dimensions: {template.size}")
+            print(f"Template redimensionné")
 
         # Valeurs par défaut
         default_rotation = 0
@@ -90,13 +93,17 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
         def get_value_with_default(values, index, default):
             return values[index] if index < len(values) and values[index] is not None else default
 
-        # Transformation de l'image principale
-        for i in range(len(xs)):
+        # Transformation des images et application sur le template
+        current_template = template.copy()
+        print(f"\n=== TRAITEMENT TEMPLATE ===")
+        
+        # Transformation de chaque image
+        for i, image in enumerate(images):
             try:
                 print(f"\n=== TRAITEMENT IMAGE {i+1} ===")
                 # Copie indépendante de l'image originale
                 new_image = image.copy()
-                print(f"Dimensions du template actuel: {template.size}")
+                print(f"Dimensions du template actuel: {current_template.size}")
 
                 # Appliquer le rognage
                 top = get_value_with_default(dhs, i, default_dh)
@@ -118,8 +125,8 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 width_factor = get_value_with_default(ws, i, default_width_percentage)
                 print(f"Facteur de redimensionnement: {width_factor}%")
                 # Calcul de la nouvelle largeur en pourcentage du template
-                new_width = int((width_factor / 100) * template.width)
-                print(f"Nouvelle largeur calculée: {new_width}px (template width: {template.width}px)")
+                new_width = int((width_factor / 100) * current_template.width)
+                print(f"Nouvelle largeur calculée: {new_width}px (template width: {current_template.width}px)")
                 # Calcul de la nouvelle hauteur en conservant le ratio
                 aspect_ratio = new_image.width / new_image.height
                 new_height = int(new_width / aspect_ratio)
@@ -139,9 +146,9 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                     print(f"Étape {i}: Filigrane appliqué")
 
                 # Positionner l'image sur le template
-                x = int(get_value_with_default(xs, i, 0) / 100 * template.width)
-                y = int(get_value_with_default(ys, i, 0) / 100 * template.height)
-                template.paste(new_image, (x, y))
+                x = int(get_value_with_default(xs, i, 0) / 100 * current_template.width)
+                y = int(get_value_with_default(ys, i, 0) / 100 * current_template.height)
+                current_template.paste(new_image, (x, y))
                 print(f"Étape {i}: Image collée aux coordonnées ({x}, {y})")
 
             except Exception as e:
@@ -160,8 +167,8 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 ty = get_value_with_default(tys, i, 0)
 
                 if text:  # Ajouter uniquement si du texte est défini
-                    template = add_text(
-                        img=template,
+                    current_template = add_text(
+                        img=current_template,
                         text=text,
                         font_name=font_name,
                         color=color,
@@ -175,13 +182,12 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
                 raise e
 
-
         # Sauvegarder et uploader le fichier
         if result_file:
             if os.path.dirname(result_file):
                 os.makedirs(os.path.dirname(result_file), exist_ok=True)
             
-            template.save(result_file, dpi=(dpi, dpi))
+            current_template.save(result_file, dpi=(dpi, dpi))
             upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
             print(f"Fichier enregistré et uploadé : {result_file}")
 

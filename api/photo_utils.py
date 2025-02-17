@@ -1,5 +1,5 @@
 import requests
-from typing import Optional, List
+from typing import Optional, List, Union
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
 import cv2
@@ -79,36 +79,40 @@ def apply_watermark(
 
 
 
-def apply_resize_template(result_img, new_width):
+def apply_resize_template(result_img: Image.Image, new_width: int) -> Image.Image:
     """
     Redimensionne une image en conservant ses proportions.
     
     Args:
-        result_img (Image): L'image à redimensionner
-        new_width (int): La nouvelle largeur souhaitée
+        result_img (Image.Image): L'image à redimensionner
+        new_width (int): La nouvelle largeur souhaitée en pixels
         
     Returns:
-        Image: L'image redimensionnée
+        Image.Image: L'image redimensionnée
     """
     width, height = result_img.size
-    # Calcul du ratio d'aspect original
     aspect_ratio = width / height
-    # Calcul de la nouvelle hauteur en préservant le ratio
     new_height = int(new_width / aspect_ratio)
-    # Redimensionnement avec les nouvelles dimensions
     resized_img = result_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
     return resized_img
 
 
 
-def apply_cartoon_filter(pil_img):
+def apply_cartoon_filter(pil_img: Image.Image) -> Image.Image:
     """
     Applique un filtre cartoon à une image PIL.
+    
+    Args:
+        pil_img (Image.Image): L'image PIL à transformer
+        
+    Returns:
+        Image.Image: L'image avec le filtre cartoon appliqué
+        
+    Raises:
+        ValueError: Si l'image n'est pas au format RGB
     """
-    # Log du format de l'image
     print(f"Type de l'image reçue : {type(pil_img)}")
     
-    # Convertir PIL.Image en tableau NumPy
     img = np.array(pil_img)
     print(f"Shape de l'image convertie en NumPy : {img.shape}")
     
@@ -117,44 +121,84 @@ def apply_cartoon_filter(pil_img):
     else:
         raise ValueError("L'image d'entrée n'est pas au format RGB.")
 
-    # Transformation en niveaux de gris
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = cv2.medianBlur(gray, 5)
-
-    # Détection des contours
     edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
                                   cv2.THRESH_BINARY, 9, 7)
-
-    # Réduction des couleurs
     color = cv2.bilateralFilter(img, 9, 300, 300)
-
-    # Fusionner les contours et l'image colorée
     cartoon = cv2.bitwise_and(color, color, mask=edges)
-
-    # Convertir de BGR à RGB pour PIL.Image
     cartoon_rgb = cv2.cvtColor(cartoon, cv2.COLOR_BGR2RGB)
     print("Filtre cartoon appliqué avec succès.")
     return Image.fromarray(cartoon_rgb)
 
 
-def load_image(image_url: str) -> Image:
+def load_image(image_url: Union[str, List[str]], is_template: bool = False) -> Union[Image.Image, List[Image.Image]]:
+    """
+    Charge une image ou une liste d'images depuis une URL ou une liste d'URLs.
+    
+    Args:
+        image_url (Union[str, List[str]]): URL unique ou liste d'URLs des images à charger
+        is_template (bool): Si True, l'URL est considérée comme unique même si c'est une liste
+        
+    Returns:
+        Union[Image.Image, List[Image.Image]]: Une image ou une liste d'images PIL
+    """
+    if isinstance(image_url, list) and not is_template:
+        return [load_image(url, is_template=True) for url in image_url]
+    
+    if isinstance(image_url, list):
+        image_url = image_url[0]
+    
     response = requests.get(image_url)
     img = Image.open(BytesIO(response.content))
     return img
 
-def apply_rotation(img: Image, rotation: int) -> Image:
+def apply_rotation(img: Image.Image, rotation: int) -> Image.Image:
+    """
+    Applique une rotation à une image.
+    
+    Args:
+        img (Image.Image): L'image à faire pivoter
+        rotation (int): L'angle de rotation en degrés
+        
+    Returns:
+        Image.Image: L'image pivotée
+    """
     print(f'rotation {rotation} appliquée')
     return img.rotate(rotation, expand=True, fillcolor=None)
 
-def apply_crop(img: Image, dh: float, db: float) -> Image:
+def apply_crop(img: Image.Image, dh: float, db: float) -> Image.Image:
+    """
+    Rogne une image en haut et en bas selon des pourcentages.
+    
+    Args:
+        img (Image.Image): L'image à rogner
+        dh (float): Pourcentage à rogner depuis le haut (0-100)
+        db (float): Pourcentage à rogner depuis le bas (0-100)
+        
+    Returns:
+        Image.Image: L'image rognée
+    """
     width, height = img.size
-    top = (dh / 100) * height  # Rognage depuis le haut
-    bottom = height - ((db / 100) * height)  # Rognage depuis le bas
+    top = (dh / 100) * height
+    bottom = height - ((db / 100) * height)
     return img.crop((0, top, width, bottom))
 
-def apply_filter(img: Image, _filter: str) -> Image:
+def apply_filter(img: Image.Image, _filter: str) -> Image.Image:
     """
     Applique un filtre spécifique à une image PIL.
+    
+    Args:
+        img (Image.Image): L'image à filtrer
+        _filter (str): Le type de filtre à appliquer ('nb', 'cartoon', ou autre)
+        
+    Returns:
+        Image.Image: L'image avec le filtre appliqué
+        
+    Notes:
+        - 'nb' : Convertit l'image en niveaux de gris
+        - 'cartoon' : Applique un effet cartoon
+        - autre valeur : Retourne l'image sans modification
     """
     print(f"Filtre demandé : {_filter}, Type de l'image : {type(img)}")
 
@@ -169,16 +213,36 @@ def apply_filter(img: Image, _filter: str) -> Image:
 
 
 def add_text(
-    img: Image = Image.new('RGB', (100, 100)), 
+    img: Image.Image = Image.new('RGB', (100, 100)), 
     text: str = "Sample Text", 
-    font_name: str = "arial",  # Path to Arial font
+    font_name: str = "arial",
     font_size: int = 20, 
     x: float = 10, 
     y: float = 10, 
     color: str = "FFFFFF",
     align: Optional[str] = "left"
-) -> Image:
+) -> Image.Image:
+    """
+    Ajoute du texte sur une image.
     
+    Args:
+        img (Image.Image): L'image sur laquelle ajouter le texte
+        text (str): Le texte à ajouter (supporte les sauts de ligne avec <br>)
+        font_name (str): Nom de la police (arial, tnr, helvetica, verdana, avenir, roboto)
+        font_size (int): Taille de la police en points
+        x (float): Position horizontale en pourcentage (0-100)
+        y (float): Position verticale en pourcentage (0-100)
+        color (str): Couleur du texte en format hexadécimal sans #
+        align (str, optional): Alignement du texte (left, center, right)
+        
+    Returns:
+        Image.Image: L'image avec le texte ajouté
+        
+    Notes:
+        - Les chemins des polices sont prédéfinis dans le système
+        - Si la police n'est pas trouvée, utilise la police par défaut du système
+        - Les sauts de ligne sont gérés avec la balise <br>
+    """
     font_path = ''
 
     match font_name:

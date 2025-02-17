@@ -2,8 +2,8 @@ description_create_image = """
 #### **Endpoint : `GET /create_image/`**
 
 Cet endpoint déclenche le traitement de l'image avec les paramètres spécifiés. Voici les principales fonctionnalités :
-- **Ajout d'une image personnalisée** sur un modèle (template).
-- **Transformation de l'image** avec rognage, rotation, redimensionnement, et filtres (par exemple : noir et blanc).
+- **Ajout de plusieurs images personnalisées** sur un modèle (template).
+- **Transformation des images** avec rognage, rotation, redimensionnement, et filtres.
 - **Ajout de textes personnalisés** (position, taille, couleur, police) avec support pour un nombre illimité de textes.
 - **Ajout facultatif d'un filigrane** (watermark) sur l'image.
 - **Téléchargement de l'image finale** sur un serveur FTP avec support des chemins absolus.
@@ -16,7 +16,6 @@ Cet endpoint déclenche le traitement de l'image avec les paramètres spécifié
 |-------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|
 | `ftp_id` (facultatif)   | ID du serveur FTP où l'image finale sera téléversée.                                               | `1`                                                 |
 | `template_url`          | URL de l'image modèle utilisée comme fond.                                                         | `https://example.com/template.jpg`                 |
-| `image_url`             | URL de l'image principale à ajouter.                                                              | `https://example.com/image.jpg`                    |
 | `result_file` (facultatif) | Chemin relatif ou absolu du fichier final sur le FTP.                                             | `output.jpg` ou `/dossier/output.jpg`              |
 | `dpi` (facultatif)      | Résolution de l'image finale en DPI.                                                              | `300`                                              |
 | `watermark_text` (facultatif) | Texte du filigrane à ajouter sur l'image.                                                      | `Confidential`                                      |
@@ -24,33 +23,43 @@ Cet endpoint déclenche le traitement de l'image avec les paramètres spécifié
 
 ---
 
-#### **Options pour la Transformation d'Images**
+#### **Options pour les Images**
 
-1. **Positionnement** (facultatif) : 
-   - `x1`, `y1`, ..., `x10`, `y10` : Coordonnées (en %) pour positionner les images sur le modèle.
-2. **Rotation** (facultatif) :
-   - `r1`, ..., `r10` : Angle de rotation (en degrés).
-3. **Redimensionnement** (facultatif) :
-   - `w1`, ..., `w10` : Largeur de l'image en % de la largeur originale.
-4. **Rognage** (facultatif) :
-   - `dh1`, `db1`, ..., `dh10`, `db10` : Pourcentage de découpe en haut et en bas de l'image.
-5. **Filtres** (facultatif) :
-   - `c1`, ..., `c10` : Filtres appliqués (par exemple : `nb` pour noir et blanc, `cartoon` pour effet cartoon).
-
----
-
-#### **Options pour le Texte (Nouveau Format)**
-
-Les textes sont maintenant gérés sous forme de listes parallèles, permettant d'ajouter un nombre illimité de textes :
+Les paramètres d'image sont maintenant gérés sous forme de listes parallèles, permettant d'ajouter un nombre illimité d'images :
 
 | **Paramètre**          | **Description**                                                                                     | **Exemple**                                         |
 |-------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|
-| `texts`                | Liste des textes à ajouter                                                                         | `texts=Bonjour&texts=Monde`                        |
-| `text_x_positions`     | Liste des positions x (en %) pour chaque texte                                                     | `text_x_positions=10&text_x_positions=50`          |
-| `text_y_positions`     | Liste des positions y (en %) pour chaque texte                                                     | `text_y_positions=90&text_y_positions=90`          |
-| `text_fonts`           | Liste des polices pour chaque texte (arial, avenir, helvetica, verdana, tnr, roboto)              | `text_fonts=arial&text_fonts=helvetica`            |
-| `text_colors`          | Liste des couleurs en hexadécimal pour chaque texte                                               | `text_colors=000000&text_colors=FF0000`           |
-| `text_sizes`           | Liste des tailles en points pour chaque texte                                                      | `text_sizes=12&text_sizes=24`                      |
+| `image_url`            | Liste des URLs des images à ajouter                                                                | `image_url=https://example.com/image1.jpg&image_url=https://example.com/image2.jpg` |
+| `image_x`              | Liste des coordonnées x (en %) pour chaque image                                                     | `image_x=10&image_x=50`                            |
+| `image_y`              | Liste des coordonnées y (en %) pour chaque image                                                     | `image_y=10&image_y=50`                            |
+| `image_rotation`       | Liste des angles de rotation (en degrés) pour chaque image                                        | `image_rotation=90&image_rotation=180`             |
+| `image_width`          | Liste des largeurs (en %) pour chaque image                                                       | `image_width=10&image_width=20`                    |
+| `image_filter`         | Liste des filtres à appliquer pour chaque image (nb, cartoon)                                     | `image_filter=nb&image_filter=cartoon`             |
+| `image_crop_top`       | Liste des pourcentages de découpe en haut pour chaque image                                       | `image_crop_top=5&image_crop_top=10`              |
+| `image_crop_bottom`    | Liste des pourcentages de découpe en bas pour chaque image                                        | `image_crop_bottom=5&image_crop_bottom=10`        |
+
+**Notes importantes sur les images :**
+- Toutes les listes de paramètres d'image doivent avoir la même longueur
+- Les positions x et y sont en pourcentage (0-100)
+- Les rotations sont en degrés (0-360)
+- Les largeurs sont en pourcentage de la largeur du template
+- Les découpes sont en pourcentage de la hauteur de l'image
+- Pour créer une liste, répétez le même paramètre avec des valeurs différentes
+
+---
+
+#### **Options pour le Texte**
+
+Les textes sont gérés sous forme de listes parallèles :
+
+| **Paramètre**          | **Description**                                                                                     | **Exemple**                                         |
+|-------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| `text`                 | Liste des textes à ajouter                                                                         | `text=Bonjour&text=Monde`                          |
+| `text_x`              | Liste des positions x (en %) pour chaque texte                                                     | `text_x=10&text_x=50`                              |
+| `text_y`              | Liste des positions y (en %) pour chaque texte                                                     | `text_y=90&text_y=90`                              |
+| `text_font`            | Liste des polices pour chaque texte (arial, avenir, helvetica, verdana, tnr, roboto)              | `text_font=arial&text_font=helvetica`              |
+| `text_color`           | Liste des couleurs en hexadécimal pour chaque texte                                               | `text_color=000000&text_color=FF0000`             |
+| `text_size`            | Liste des tailles en points pour chaque texte                                                      | `text_size=12&text_size=24`                        |
 
 **Notes importantes sur les textes :**
 - Toutes les listes de paramètres de texte doivent avoir la même longueur
@@ -58,7 +67,6 @@ Les textes sont maintenant gérés sous forme de listes parallèles, permettant 
 - Les tailles de texte sont en points (1-100)
 - Les couleurs doivent être en format hexadécimal (6 caractères)
 - Si certains paramètres sont omis, des valeurs par défaut sont utilisées
-- Pour créer une liste, répétez le même paramètre avec des valeurs différentes
 
 ---
 
@@ -68,31 +76,43 @@ Les textes sont maintenant gérés sous forme de listes parallèles, permettant 
 ```http
 GET /create_image/
 ?template_url=https://example.com/template.jpg
-&image_url=https://example.com/image.jpg
 &result_file=/dossier/final.jpg
 &dpi=300
 &watermark_text=Confidential
-&x1=10&y1=10&w1=50
-&texts=Bonjour
-&texts=Monde
-&text_x_positions=50
-&text_x_positions=70
-&text_y_positions=90
-&text_y_positions=90
-&text_fonts=arial
-&text_fonts=helvetica
-&text_colors=000000
-&text_colors=FF0000
-&text_sizes=20
-&text_sizes=24
+&image_url=https://example.com/image1.jpg
+&image_url=https://example.com/image2.jpg
+&image_x=10
+&image_x=50
+&image_y=10
+&image_y=50
+&image_rotation=90
+&image_rotation=180
+&image_width=30
+&image_width=40
+&image_filter=nb
+&image_filter=cartoon
+&text=Bonjour
+&text=Monde
+&text_x=50
+&text_x=70
+&text_y=90
+&text_y=90
+&text_font=arial
+&text_font=helvetica
+&text_color=000000
+&text_color=FF0000
+&text_size=20
+&text_size=24
 ```
 
 **Explication :**
-1. Charge le modèle et une image depuis leurs URLs respectives
-2. Positionne l'image à 10% des bords avec une largeur de 50%
-3. Ajoute deux textes en répétant chaque paramètre :
-   - Premier texte : "Bonjour" en noir, police Arial, taille 20, position (50%, 90%)
-   - Deuxième texte : "Monde" en rouge, police Helvetica, taille 24, position (70%, 90%)
+1. Charge le modèle depuis son URL
+2. Ajoute et transforme deux images :
+   - Première image : position (10%, 10%), rotation 90°, largeur 30%, filtre noir et blanc
+   - Deuxième image : position (50%, 50%), rotation 180°, largeur 40%, filtre cartoon
+3. Ajoute deux textes :
+   - "Bonjour" en noir, police Arial, taille 20, position (50%, 90%)
+   - "Monde" en rouge, police Helvetica, taille 24, position (70%, 90%)
 4. Applique un filigrane "Confidential"
 5. Sauvegarde le résultat dans `/dossier/final.jpg` sur le FTP
 
@@ -101,10 +121,12 @@ GET /create_image/
 #### **Gestion des Erreurs**
 
 L'API effectue plusieurs validations :
+- Vérification qu'au moins une image est spécifiée
+- Vérification que toutes les listes de paramètres d'image ont la même longueur
 - Vérification des positions (0-100%)
 - Validation des tailles de texte (1-100)
 - Validation des couleurs hexadécimales
-- Vérification de la cohérence des listes de paramètres de texte
+- Vérification de la cohérence des listes de paramètres
 - Validation des chemins FTP"""
 
 
