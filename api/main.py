@@ -1,13 +1,17 @@
 from fastapi import FastAPI
-from router import image_router, celery_router
-from celery_worker import celery_app
+from config.logging_config import configure_logging
+from router import router_celery, router_image
 
-description = """
-### Documentation de l'API de Traitement d'Images
+# Configuration du logging
+logger = configure_logging()
 
-L'API permet de traiter et de personnaliser des images en utilisant différents paramètres fournis par l'utilisateur. L'objectif est de générer une image finale combinant un modèle de fond, une image principale, des textes personnalisés, et éventuellement des filigranes (watermarks). L'image résultante peut être uploadée sur un serveur FTP.
-"""
+app = FastAPI(title="Photo Arc API")
 
-app = FastAPI(description=description)
-app.include_router(image_router)
-app.include_router(celery_router)
+# Enregistrement des routers
+app.include_router(router_celery.router)
+app.include_router(router_image.router)
+
+@app.get("/")
+async def root():
+    logger.info("Requête reçue sur la route racine")
+    return {"message": "Bienvenue sur l'API Photo Arc"}

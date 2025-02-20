@@ -5,6 +5,13 @@ from ftplib import FTP
 from tempfile import NamedTemporaryFile
 import os
 import logging
+from queue import Queue
+import threading
+from typing import List, Dict
+import json
+from dataclasses import dataclass
+from time import time
+from io import BytesIO
 
 # Configuration du logger
 logger = logging.getLogger(__name__)
@@ -14,6 +21,94 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+@dataclass
+class LogEntry:
+    timestamp: float
+    message: str
+    level: str
+    metadata: Dict
+
+class LogBuffer:
+    _instance = None
+    BUFFER_SIZE = 50  # Nombre de logs avant écriture
+    FLUSH_INTERVAL = 60  # Intervalle en secondes
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(LogBuffer, cls).__new__(cls)
+            cls._instance._initialize()
+        return cls._instance
+
+    def _initialize(self):
+        self.buffer: List[LogEntry] = []
+        self.lock = threading.Lock()
+        self.last_flush = time()
+        self._start_flush_timer()
+
+    def _start_flush_timer(self):
+        def flush_timer():
+            while True:
+                if time() - self.last_flush >= self.FLUSH_INTERVAL:
+                    self.flush()
+                threading.Event().wait(10)  # Check toutes les 10 secondes
+
+        thread = threading.Thread(target=flush_timer, daemon=True)
+        thread.start()
+
+    def add_log(self, message: str, level: str = "INFO", metadata: Dict = None):
+        log_entry = LogEntry(
+            timestamp=time(),
+            message=message,
+            level=level,
+            metadata=metadata or {}
+        )
+        
+        with self.lock:
+            self.buffer.append(log_entry)
+            if len(self.buffer) >= self.BUFFER_SIZE:
+                self.flush()
+
+    def flush(self):
+        with self.lock:
+            if not self.buffer:
+                return
+            
+            current_buffer = self.buffer
+            self.buffer = []
+            self.last_flush = time()
+            
+            return current_buffer
+
+def write_logs_to_ftp(logs: List[LogEntry], ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str):
+    """Écrit un groupe de logs dans un seul fichier sur le FTP."""
+    if not logs:
+        return
+
+    # Créer un seul fichier pour tous les logs
+    tz = pytz.timezone('Europe/Paris')
+    now = datetime.now(tz)
+    log_filename = f"batch_log_{now.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    
+    with BytesIO() as bio:
+        # Écrire tous les logs dans le buffer
+        for log in logs:
+            log_line = {
+                "timestamp": log.timestamp,
+                "message": log.message,
+                "level": log.level,
+                "metadata": log.metadata
+            }
+            bio.write(json.dumps(log_line).encode('utf-8') + b'\n')
+        
+        bio.seek(0)
+        
+        # Upload en une seule connexion FTP
+        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+            ftp.cwd('/')
+            if log_folder != '/':
+                ensure_ftp_path(ftp, log_folder)
+            ftp.storbinary(f'STOR {os.path.join(log_folder, log_filename)}', bio)
 
 def ftp_security(ftp__id):
     """
@@ -82,92 +177,35 @@ def ensure_ftp_path(ftp, path):
 
                 
 def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
-    """
-    Enregistre les paramètres de la requête dans un fichier texte et téléverse sur le serveur FTP.
-
-    Args:
-    - params (dict): Dictionnaire des paramètres de la requête.
-    - ftp_host (str): L'hôte du serveur FTP.
-    - ftp_username (str): Le nom d'utilisateur pour se connecter au serveur FTP.
-    - ftp_password (str): Le mot de passe pour se connecter au serveur FTP.
-    - log_folder (str): Le dossier sur le serveur FTP où le fichier de log sera enregistré.
-    """
-    log_message = f"Request received at {datetime.now().isoformat()} with parameters: {params}\n"
-    
-    # Crée un nom de fichier basé sur la date et l'heure actuelle
-    tz = pytz.timezone('Europe/Paris')
-    now = datetime.now(tz)
-    log_filename = f"request_log_{now.strftime('%Y%m%d_%H%M%S')}.txt"
-    log_file_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-    
-    print(f"Creating log file at: {log_file_path}")  # Debugging message
-
-    with NamedTemporaryFile("w", delete=False) as temp_log_file:
-        temp_log_file.write(log_message)
-        temp_log_path = temp_log_file.name
-
-    print(f"Temporary log file created at: {temp_log_path}")  # Debugging message
-
-    try:
-        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-            ftp.cwd('/')  # Assurez-vous d'être à la racine
-            if log_folder != '/':  # Vérifie si le dossier de logs n'est pas la racine
-                ensure_ftp_path(ftp, log_folder)
-                print(f"Ensured FTP path: {log_folder}")  # Debugging message
-            
-            # Construire le chemin complet du fichier sur le serveur FTP
-            complete_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-            print(f"Complete path on FTP: {complete_path}")  # Debugging message
-
-            with open(temp_log_path, 'rb') as file:
-                ftp.storbinary(f'STOR {complete_path}', file)
-                print(f"Log file uploaded to FTP: {complete_path}")  # Debugging message
-
-    except Exception as e:
-        print(f"Erreur lors du téléversement du log sur FTP : {e}")
-
-    finally:
-        os.remove(temp_log_path)  # Nettoyage du fichier temporaire
-        print(f"Temporary log file removed: {temp_log_path}")  # Debugging message
-
+    """Version optimisée utilisant le buffer de logs."""
+    log_buffer = LogBuffer()
+    log_buffer.add_log(
+        message="Request received",
+        level="INFO",
+        metadata={"params": params, "timestamp": datetime.now().isoformat()}
+    )
 
 def log_to_ftp(ftp_host: str, ftp_username: str, ftp_password: str, log_message: str, log_folder: str = "error_logs"):
-    """
-    Enregistre un message de log dans un dossier spécifié sur un serveur FTP.
+    """Version optimisée utilisant le buffer de logs."""
+    log_buffer = LogBuffer()
+    log_buffer.add_log(
+        message=log_message,
+        level="ERROR",
+        metadata={"folder": log_folder}
+    )
 
-    Args:
-    - ftp_host (str): L'hôte du serveur FTP.
-    - ftp_username (str): Le nom d'utilisateur pour se connecter au serveur FTP.
-    - ftp_password (str): Le mot de passe pour se connecter au serveur FTP.
-    - log_message (str): Le message à enregistrer dans le fichier de log.
-    - log_folder (str): Le dossier sur le serveur FTP où le fichier de log sera enregistré.
-    """
+# Démarrer un thread pour vider périodiquement le buffer
+def start_log_flusher(ftp_host: str, ftp_username: str, ftp_password: str):
+    def flush_logs():
+        log_buffer = LogBuffer()
+        while True:
+            logs = log_buffer.flush()
+            if logs:
+                write_logs_to_ftp(logs, ftp_host, ftp_username, ftp_password, "/logs")
+            threading.Event().wait(LogBuffer.FLUSH_INTERVAL)
 
-    # Crée un nom de fichier basé sur la date et l'heure actuelle
-    tz = pytz.timezone('Europe/Paris')
-
-    now = datetime.now(tz)
-
-    log_filename = f"error_log_{now.strftime('%Y%m%d_%H%M%S')}.txt"
-    log_file_path = os.path.join(log_folder, log_filename).replace('\\', '/')
-    
-    print(f"Tentative de log FTP dans : {log_file_path}")  # Débogage
-    
-    with NamedTemporaryFile("w", delete=False) as temp_log_file:
-        temp_log_file.write(log_message)
-        temp_log_path = temp_log_file.name
-
-    try:
-        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-            ftp.cwd('/')  # Assurez-vous d'être à la racine
-            if log_folder != '/':  # Vérifie si le dossier de logs n'est pas la racine
-                ensure_ftp_path(ftp, log_folder)
-            with open(temp_log_path, 'rb') as file:
-                ftp.storbinary(f'STOR {log_file_path}', file)
-    except Exception as e:
-        print(f"Erreur lors du téléversement du log sur FTP : {e}")
-    finally:
-        os.remove(temp_log_path)  # Nettoyage du fichier temporaire
+    thread = threading.Thread(target=flush_logs, daemon=True)
+    thread.start()
 
 def upload_file_ftp(file_path: str, ftp_host: str, ftp_username: str, ftp_password: str, output_path: str):
     """

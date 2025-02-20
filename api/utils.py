@@ -3,8 +3,19 @@ import os
 from ftplib import FTP
 from typing import List, Dict
 from PIL import Image
-from photo_utils import apply_watermark, apply_resize_template, add_text, apply_filter, apply_crop, apply_rotation, load_image
+from photo_utils import (
+    apply_watermark, 
+    apply_resize_template, 
+    add_text, 
+    apply_filter, 
+    apply_crop, 
+    apply_rotation, 
+    load_image,
+    TextRenderStrategy
+)
 from ftp_utils import log_request_to_ftp, log_to_ftp, upload_file_ftp
+from io import BytesIO
+import logging
 
 
 
@@ -36,15 +47,16 @@ def process_intercalaire(result_file: str, background_color: str, width: int, he
                 align=block.get("align", "left")
             )
 
-        # Save the image temporarily
-        temp_file_path = f"/tmp/intercalaire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        img.save(temp_file_path)
-
-        # Upload the file to the FTP server
-        upload_file_ftp(temp_file_path, ftp_host, ftp_username, ftp_password, result_file)
-
-        # Clean up temporary files
-        clean_up_files([temp_file_path])
+        # Sauvegarder directement dans un BytesIO
+        with BytesIO() as bio:
+            img.save(bio, format='JPEG')
+            bio.seek(0)
+            
+            # Upload the file to the FTP server
+            with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+                directory_path, filename = os.path.split(result_file)
+                ensure_ftp_path(ftp, directory_path)
+                ftp.storbinary(f'STOR {result_file}', bio)
 
         return {"message": "Intercalaire created successfully"}
 
@@ -52,12 +64,34 @@ def process_intercalaire(result_file: str, background_color: str, width: int, he
         log_message = f"Error creating intercalaire: {str(e)}"
         log_to_ftp(
             ftp_host=ftp_host,
-            ftp_username=ftp_username,
+            ftp_username=ftp_password,
             ftp_password=ftp_password,
             log_message=log_message,
             log_folder="error_logs"
         )
         raise e
+
+def ensure_ftp_path(ftp, path):
+    """Assure que le chemin existe sur le serveur FTP."""
+    if not path:
+        return
+        
+    # Gestion des chemins absolus et relatifs
+    if path.startswith('/'):
+        ftp.cwd('/')
+        path = path[1:]
+    
+    # Navigation dans l'arborescence
+    for directory in path.split('/'):
+        if directory:
+            try:
+                ftp.cwd(directory)
+            except:
+                try:
+                    ftp.mkd(directory)
+                    ftp.cwd(directory)
+                except:
+                    pass
 
 def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, dpi, params, watermark_text):
     """
@@ -66,21 +100,30 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
     log_request_to_ftp(params, ftp_host, ftp_username, ftp_password)
 
     try:
-        print("=== DÉBUT DU PROCESSUS ===")
+        logger = logging.getLogger(__name__)
+        logger.info("=== DÉBUT DU PROCESSUS ===")
+        
+        # Log détaillé des paramètres
+        logger.info(f"Paramètres images: xs={xs}, ys={ys}, ws={ws}, rs={rs}, cs={cs}")
+        logger.info(f"Paramètres texte: texts={ts}, fonts={tfs}, colors={tcs}, sizes={tts}, positions_x={txs}, positions_y={tys}")
+        if result_w:
+            logger.info(f"Largeur finale demandée: {result_w}px")
+        
         # Charger le template et les images
         template = load_image(template_url, is_template=True)
-        print(f"Template chargé, dimensions: {template.size}")
+        logger.debug(f"Template chargé, dimensions: {template.size}")
         
         images = load_image(image_url)
         if not isinstance(images, list):
             images = [images]
-        print(f"Images source chargées, nombre: {len(images)}")
+        logger.debug(f"Images source chargées, nombre: {len(images)}")
 
-        # Redimensionner le template final en premier
-        if result_w:
-            print(f"Redimensionnement du template à {result_w}px de large...")
-            template = apply_resize_template(template, result_w)
-            print(f"Template redimensionné")
+        # Calculer le facteur d'échelle basé sur result_w
+        # Si result_w n'est pas spécifié, utiliser la largeur actuelle du template
+        reference_width = 1000  # Largeur de référence
+        target_width = result_w if result_w else template.width
+        scale_factor = target_width / reference_width
+        logger.info(f"Facteur d'échelle calculé: {scale_factor} (target_width={target_width}, reference_width={reference_width})")
 
         # Valeurs par défaut
         default_rotation = 0
@@ -95,106 +138,106 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
         # Transformation des images et application sur le template
         current_template = template.copy()
-        print(f"\n=== TRAITEMENT TEMPLATE ===")
         
         # Transformation de chaque image
         for i, image in enumerate(images):
             try:
-                print(f"\n=== TRAITEMENT IMAGE {i+1} ===")
+                logger.info(f"Traitement de l'image {i+1}/{len(images)}")
                 # Copie indépendante de l'image originale
                 new_image = image.copy()
-                print(f"Dimensions du template actuel: {current_template.size}")
 
-                # Appliquer le rognage
+                # Appliquer le rognage (les pourcentages restent les mêmes)
                 top = get_value_with_default(dhs, i, default_dh)
                 bottom = get_value_with_default(dbs, i, default_db)
                 new_image = apply_crop(new_image, top, bottom)
-                print(f"Étape {i}: Après rognage : {new_image.size}")
 
-                # Appliquer la rotation
+                # Appliquer la rotation (les angles restent les mêmes)
                 rotation = get_value_with_default(rs, i, default_rotation)
                 new_image = apply_rotation(new_image, rotation)
-                print(f"Étape {i}: Après rotation ({rotation}°) : {new_image.size}")
 
                 # Appliquer le filtre
                 filter_ = get_value_with_default(cs, i, default_filter)
                 new_image = apply_filter(new_image, filter_)
-                print(f"Étape {i}: Après filtre ({filter_}) : {new_image.size}")
 
-                # Appliquer le redimensionnement
+                # Appliquer le redimensionnement en tenant compte du facteur d'échelle
                 width_factor = get_value_with_default(ws, i, default_width_percentage)
-                print(f"Facteur de redimensionnement: {width_factor}%")
-                # Calcul de la nouvelle largeur en pourcentage du template
-                new_width = int((width_factor / 100) * current_template.width)
-                print(f"Nouvelle largeur calculée: {new_width}px (template width: {current_template.width}px)")
-                # Calcul de la nouvelle hauteur en conservant le ratio
+                scaled_width = int((width_factor / 100) * current_template.width)
                 aspect_ratio = new_image.width / new_image.height
-                new_height = int(new_width / aspect_ratio)
-                print(f"Nouvelle hauteur calculée: {new_height}px (ratio: {aspect_ratio})")
+                scaled_height = int(scaled_width / aspect_ratio)
 
-                # Vérification que les dimensions sont valides
-                if new_width <= 0 or new_height <= 0:
-                    raise ValueError(f"Dimensions invalides à l'étape {i} : width={new_width}, height={new_height}")
+                if scaled_width <= 0 or scaled_height <= 0:
+                    raise ValueError(f"Dimensions invalides à l'étape {i} : width={scaled_width}, height={scaled_height}")
 
-                # Redimensionnement de l'image
-                new_image = new_image.resize((new_width, new_height))
-                print(f"Étape {i}: Après redimensionnement : {new_image.size}")
+                new_image = new_image.resize((scaled_width, scaled_height))
 
-                # Appliquer le filigrane
+                # Appliquer le filigrane avec une taille adaptée
                 if watermark_text:
                     new_image = apply_watermark(new_image, watermark_text)
-                    print(f"Étape {i}: Filigrane appliqué")
 
-                # Positionner l'image sur le template
+                # Positionner l'image sur le template (les pourcentages restent les mêmes)
                 x = int(get_value_with_default(xs, i, 0) / 100 * current_template.width)
                 y = int(get_value_with_default(ys, i, 0) / 100 * current_template.height)
                 current_template.paste(new_image, (x, y))
-                print(f"Étape {i}: Image collée aux coordonnées ({x}, {y})")
 
             except Exception as e:
                 log_message = f"Erreur à l'étape {i} : {e}"
                 log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
                 raise e
 
-        # Ajouter du texte
-        for i in range(len(ts)):
-            try:
-                text = get_value_with_default(ts, i, "")
-                font_name = get_value_with_default(tfs, i, "arial")
-                color = get_value_with_default(tcs, i, "000000")
-                font_size = get_value_with_default(tts, i, 20)
-                tx = get_value_with_default(txs, i, 0)
-                ty = get_value_with_default(tys, i, 0)
+        # Ajouter du texte en dernier
+        if ts:
+            logger.info(f"Ajout de {len(ts)} textes")
+            for i in range(len(ts)):
+                try:
+                    text = get_value_with_default(ts, i, "")
+                    font_name = get_value_with_default(tfs, i, "arial")
+                    color = get_value_with_default(tcs, i, "000000")
+                    font_size = get_value_with_default(tts, i, 20)
+                    tx = get_value_with_default(txs, i, 0)
+                    ty = get_value_with_default(tys, i, 0)
 
-                if text:  # Ajouter uniquement si du texte est défini
-                    current_template = add_text(
-                        img=current_template,
-                        text=text,
-                        font_name=font_name,
-                        color=color,
-                        font_size=font_size,
-                        x=tx,
-                        y=ty
-                    )
-                    print(f"Étape texte {i}: Texte ajouté ({text})")
-            except Exception as e:
-                log_message = f"Erreur ajout texte à l'étape {i} : {e}"
-                log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
-                raise e
+                    if text:
+                        # Ajuster la taille de la police en fonction de la taille finale
+                        adjusted_font_size = int(font_size * scale_factor)
+                        logger.info(f"Texte {i+1}: '{text}', police={font_name}, taille={font_size}->{adjusted_font_size}, position=({tx}%, {ty}%)")
+                        current_template = add_text(
+                            img=current_template,
+                            text=text,
+                            font_name=font_name,
+                            color=color,
+                            font_size=adjusted_font_size,
+                            x=tx,
+                            y=ty,
+                            strategy=TextRenderStrategy.COMBINED,
+                            dpi=dpi
+                        )
+                except Exception as e:
+                    log_message = f"Erreur ajout texte à l'étape {i} : {e}"
+                    log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
+                    raise e
+
+        # Redimensionner le template final si spécifié
+        if result_w:
+            logger.debug(f"Redimensionnement du template à {result_w}px de large...")
+            current_template = apply_resize_template(current_template, result_w)
 
         # Sauvegarder et uploader le fichier
         if result_file:
-            if os.path.dirname(result_file):
-                os.makedirs(os.path.dirname(result_file), exist_ok=True)
-            
-            current_template.save(result_file, dpi=(dpi, dpi))
-            upload_file_ftp(result_file, ftp_host, ftp_username, ftp_password, result_file)
-            print(f"Fichier enregistré et uploadé : {result_file}")
+            logger.info("Upload du fichier final")
+            with BytesIO() as bio:
+                current_template.save(bio, format='JPEG', dpi=(dpi, dpi))
+                bio.seek(0)
+                
+                with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+                    directory_path, filename = os.path.split(result_file)
+                    ensure_ftp_path(ftp, directory_path)
+                    ftp.storbinary(f'STOR {result_file}', bio)
 
     except Exception as e:
         log_message = f"Erreur générale : {str(e)}"
-        print(log_message)
+        logger.error(log_message)
         log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
+        raise e
 
     finally:
         if result_file and os.path.exists(result_file):

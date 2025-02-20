@@ -1,9 +1,12 @@
 import requests
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Tuple
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from io import BytesIO
 import cv2
 import numpy as np
+from enum import Enum
+from dataclasses import dataclass
+import logging
 
 def apply_watermark(
     img: Image,
@@ -211,19 +214,236 @@ def apply_filter(img: Image.Image, _filter: str) -> Image.Image:
             print(f"Filtre inconnu : {_filter}. Aucun filtre appliqué.")
             return img
 
+class TextRenderStrategy(str, Enum):
+    BASIC = "basic"           # Rendu basique
+    HIGH_RES = "high_res"     # Rendu haute résolution avec downscaling
+    OUTLINED = "outlined"     # Texte avec contour
+    SHADOW = "shadow"         # Texte avec ombre
+    COMBINED = "combined"     # Combine plusieurs stratégies
+
+@dataclass
+class TextConfig:
+    text: str
+    font_name: str = "arial"
+    font_size: int = 20
+    x: float = 10
+    y: float = 10
+    color: str = "FFFFFF"
+    align: Optional[str] = "left"
+    strategy: TextRenderStrategy = TextRenderStrategy.BASIC
+    dpi: int = 300
+    stroke_width: int = 0
+    shadow_offset: Tuple[int, int] = (2, 2)
+    background_blur: bool = False
+
+class TextRenderer:
+    def __init__(self, config: TextConfig):
+        self.config = config
+        self._prepare_font()
+
+    def _prepare_font(self):
+        """Prépare la police avec le bon chemin et la bonne taille."""
+        font_path = ''
+        match self.config.font_name.lower():
+            case "arial":
+                font_path = "/app/fonts/arial.ttf"
+            case "tnr":
+                font_path = "/app/fonts/TimesNewRoman.ttf"
+            case "helvetica":
+                font_path = "/app/fonts/Helvetica.ttf"
+            case "verdana":
+                font_path = "/app/fonts/Verdana.ttf"
+            case "avenir":
+                font_path = "/app/fonts/AvenirNextCyr-Regular.ttf"
+            case "roboto":
+                font_path = "/app/fonts/Roboto-Medium.ttf"
+            case _:
+                font_path = "/app/fonts/arial.ttf"  # Police par défaut
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Chargement de la police : {font_path}")
+        
+        try:
+            self.font = ImageFont.truetype(font_path, self.config.font_size)
+            logger.info(f"Police chargée avec succès : {self.config.font_name}, taille={self.config.font_size}")
+        except Exception as e:
+            logger.error(f"Erreur lors du chargement de la police {font_path}: {str(e)}")
+            logger.warning("Tentative de chargement de la police de secours (arial.ttf)")
+            try:
+                # Essayer de charger arial comme police de secours avec la taille demandée
+                self.font = ImageFont.truetype("/app/fonts/arial.ttf", self.config.font_size)
+                logger.info("Police de secours (arial.ttf) chargée avec succès")
+            except Exception as e:
+                logger.error(f"Échec du chargement de la police de secours : {str(e)}")
+                logger.warning("Utilisation de la police système par défaut (taille fixe)")
+                self.font = ImageFont.load_default()
+                # Ajuster la taille du texte en utilisant un facteur d'échelle
+                self.scale_factor = self.config.font_size / 10  # 10 est la taille approximative de la police par défaut
+
+    def _get_text_size(self, text: str) -> Tuple[int, int]:
+        """Calcule la taille du texte avec la police actuelle."""
+        draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+        return draw.textsize(text, font=self.font)
+
+    def _render_basic(self, img: Image.Image) -> Image.Image:
+        """Rendu basique du texte."""
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        x = (self.config.x / 100) * width
+        y = (self.config.y / 100) * height
+        
+        lines = self.config.text.split("<br>")
+        line_height = self.config.font_size + 5
+        
+        # Si nous utilisons la police par défaut, ajuster la position pour la mise à l'échelle
+        if hasattr(self, 'scale_factor'):
+            line_height = int(line_height * self.scale_factor)
+        
+        for i, line in enumerate(lines):
+            # Position de base pour le texte
+            pos_x, pos_y = x, y + i * line_height
+            
+            # Si nous utilisons la police par défaut, créer une image temporaire plus grande
+            if hasattr(self, 'scale_factor'):
+                # Créer une image temporaire pour le texte
+                text_img = Image.new('RGBA', (width, height), (255, 255, 255, 0))
+                temp_draw = ImageDraw.Draw(text_img)
+                temp_draw.text((pos_x, pos_y), line, font=self.font, fill="#" + self.config.color, align=self.config.align)
+                
+                # Redimensionner le texte selon le facteur d'échelle
+                scaled_text = text_img.resize(
+                    (int(width * self.scale_factor), int(height * self.scale_factor)),
+                    Image.Resampling.LANCZOS
+                )
+                
+                # Redimensionner à la taille originale
+                final_text = scaled_text.resize((width, height), Image.Resampling.LANCZOS)
+                
+                # Fusionner avec l'image principale
+                img = Image.alpha_composite(img.convert('RGBA'), final_text)
+            else:
+                # Rendu normal pour les polices TrueType
+                draw.text((pos_x, pos_y), line, font=self.font, fill="#" + self.config.color, align=self.config.align)
+        
+        return img.convert('RGB') if img.mode == 'RGBA' else img
+
+    def _render_high_res(self, img: Image.Image) -> Image.Image:
+        """Rendu haute résolution avec downscaling."""
+        # Calculer le scale_factor en fonction du DPI
+        base_dpi = 72  # DPI de base pour les polices
+        scale_factor = max(1, self.config.dpi / base_dpi)
+        
+        # Créer une image temporaire plus grande
+        temp_img = img.copy().resize(
+            (int(img.width * scale_factor), int(img.height * scale_factor)),
+            Image.Resampling.LANCZOS
+        )
+        
+        # Ajuster la taille de la police pour la plus grande image
+        original_size = self.config.font_size
+        self.config.font_size = int(original_size * scale_factor)
+        self._prepare_font()
+        
+        # Rendre le texte sur l'image plus grande
+        temp_img = self._render_basic(temp_img)
+        
+        # Restaurer la taille de police originale
+        self.config.font_size = original_size
+        self._prepare_font()
+        
+        # Redimensionner à la taille originale avec antialiasing de haute qualité
+        return temp_img.resize(img.size, Image.Resampling.LANCZOS)
+
+    def _render_outlined(self, img: Image.Image) -> Image.Image:
+        """Rendu avec contour."""
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        x = (self.config.x / 100) * width
+        y = (self.config.y / 100) * height
+        
+        lines = self.config.text.split("<br>")
+        line_height = self.config.font_size + 5
+        stroke_width = max(1, self.config.font_size // 30)
+        
+        for i, line in enumerate(lines):
+            # Dessiner le contour
+            draw.text(
+                (x, y + i * line_height),
+                line,
+                font=self.font,
+                fill="#000000",
+                stroke_width=stroke_width,
+                align=self.config.align
+            )
+            # Dessiner le texte
+            draw.text(
+                (x, y + i * line_height),
+                line,
+                font=self.font,
+                fill="#" + self.config.color,
+                align=self.config.align
+            )
+        return img
+
+    def _render_shadow(self, img: Image.Image) -> Image.Image:
+        """Rendu avec ombre portée."""
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        x = (self.config.x / 100) * width
+        y = (self.config.y / 100) * height
+        
+        lines = self.config.text.split("<br>")
+        line_height = self.config.font_size + 5
+        
+        for i, line in enumerate(lines):
+            # Dessiner l'ombre
+            draw.text(
+                (x + self.config.shadow_offset[0], y + i * line_height + self.config.shadow_offset[1]),
+                line,
+                font=self.font,
+                fill="#000000",
+                align=self.config.align
+            )
+            # Dessiner le texte
+            draw.text(
+                (x, y + i * line_height),
+                line,
+                font=self.font,
+                fill="#" + self.config.color,
+                align=self.config.align
+            )
+        return img
+
+    def render(self, img: Image.Image) -> Image.Image:
+        """Applique la stratégie de rendu sélectionnée."""
+        match self.config.strategy:
+            case TextRenderStrategy.BASIC:
+                return self._render_basic(img)
+            case TextRenderStrategy.HIGH_RES:
+                return self._render_high_res(img)
+            case TextRenderStrategy.OUTLINED:
+                return self._render_outlined(img)
+            case TextRenderStrategy.SHADOW:
+                return self._render_shadow(img)
+            case TextRenderStrategy.COMBINED:
+                # Utiliser uniquement le rendu haute résolution
+                return self._render_high_res(img)
+        return img
 
 def add_text(
-    img: Image.Image = Image.new('RGB', (100, 100)), 
+    img: Image.Image,
     text: str = "Sample Text", 
     font_name: str = "arial",
     font_size: int = 20, 
     x: float = 10, 
     y: float = 10, 
     color: str = "FFFFFF",
-    align: Optional[str] = "left"
+    align: Optional[str] = "left",
+    strategy: TextRenderStrategy = TextRenderStrategy.COMBINED,
+    dpi: int = 300
 ) -> Image.Image:
     """
-    Ajoute du texte sur une image.
+    Ajoute du texte sur une image avec une qualité améliorée.
     
     Args:
         img (Image.Image): L'image sur laquelle ajouter le texte
@@ -234,47 +454,38 @@ def add_text(
         y (float): Position verticale en pourcentage (0-100)
         color (str): Couleur du texte en format hexadécimal sans #
         align (str, optional): Alignement du texte (left, center, right)
+        strategy (TextRenderStrategy): Stratégie de rendu du texte
+        dpi (int): Résolution en DPI pour le calcul de la taille de police
         
     Returns:
         Image.Image: L'image avec le texte ajouté
         
-    Notes:
-        - Les chemins des polices sont prédéfinis dans le système
-        - Si la police n'est pas trouvée, utilise la police par défaut du système
-        - Les sauts de ligne sont gérés avec la balise <br>
+    Raises:
+        ValueError: Si les paramètres sont invalides
     """
-    font_path = ''
-
-    match font_name:
-        case "arial" :
-            font_path = "/usr/share/fonts/arial.ttf"
-        case "tnr" :
-            font_path = "/usr/share/fonts/TimesNewRoman.ttf"
-        case "helvetica" :
-            font_path = "/usr/share/fonts/Helvetica.ttf"
-        case "verdana" :
-            font_path = "/usr/share/fonts/Verdana.ttf"
-        case "avenir" :
-            font_path = "/usr/share/fonts/AvenirNextCyr-Regular.ttf"
-        case "roboto" :
-            font_path = "/usr/share/fonts/Roboto-Medium.ttf"
-    try:
-        font = ImageFont.truetype(font_path, font_size)
-    except IOError:
-        print("Font not found. Using default font.")
-        font = ImageFont.load_default()
-
-    draw = ImageDraw.Draw(img)
-    width, height = img.size
-    y = (y / 100) * height
-    x = (x / 100) * width
-    color = "#" + color
-
-    # Diviser le texte en lignes
-    lines = text.split("<br>")
-    line_height = font_size + 5  # Ajouter un espace entre les lignes
+    if not isinstance(img, Image.Image):
+        raise ValueError("L'argument img doit être une instance de PIL.Image.Image")
+        
+    if not (0 <= x <= 100) or not (0 <= y <= 100):
+        raise ValueError("Les positions x et y doivent être comprises entre 0 et 100")
+        
+    if not (1 <= font_size <= 1000):
+        raise ValueError("La taille de la police doit être comprise entre 1 et 1000")
+        
+    if not len(color) == 6 or not all(c in '0123456789ABCDEFabcdef' for c in color):
+        raise ValueError("La couleur doit être au format hexadécimal valide (6 caractères)")
     
-    for i, line in enumerate(lines):
-        draw.text((x, y + i * line_height), line, font=font, fill=color, align=align)
-
-    return img
+    config = TextConfig(
+        text=text,
+        font_name=font_name,
+        font_size=font_size,  # Utiliser la taille de police telle quelle
+        x=x,
+        y=y,
+        color=color,
+        align=align,
+        strategy=strategy,
+        dpi=dpi
+    )
+    
+    renderer = TextRenderer(config)
+    return renderer.render(img.copy())

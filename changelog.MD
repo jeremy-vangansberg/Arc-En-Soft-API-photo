@@ -19,3 +19,18 @@ image_rotation -> Valeur à mettre pour ne pas appliquer de rotation : 0
 image_filter -> Valeur à mettre pour ne pas appliquer de filtre : none
 image_crop_top -> Valeur à mettre pour ne pas rognage : 0
 image_crop_bottom -> Valeur à mettre pour ne pas rognage : 0
+
+
+20/02/2024
+- Optimisation majeure du système de logs
+- Mise en place d'un buffer de logs pour réduire les connexions FTP
+- Passage au format JSONL pour les logs
+- Suppression des fichiers temporaires pour les logs
+- Ajout d'un système de flush automatique des logs
+
+21/02/2024
+- Correction des tests unitaires :
+  - Problème de mock Celery pour reset_queue
+  - Erreur d'accès à PIL.Image.resize
+  - Tests de rendu de texte échoués (qualité, multiline, DPI)
+- Mise à jour des dépendances dans le container de test

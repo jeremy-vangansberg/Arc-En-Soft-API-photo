@@ -14,16 +14,20 @@ async def reset_celery_queue():
     Réinitialise la file d'attente Celery en purgeant toutes les tâches en attente.
     """
     try:
-        # Création d'une instance Control pour interagir avec Celery
-        control = Control(celery_app)
-        
         # Purge toutes les files d'attente
         celery_app.control.purge()
         
-        # Optionnel : Révocation de toutes les tâches en cours
-        control.revoke(None, terminate=True)
-        
+        try:
+            # Révocation de toutes les tâches en cours
+            celery_app.control.revoke(None, terminate=True)
+        except Exception as revoke_error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erreur lors de la révocation des tâches : {str(revoke_error)}"
+            )
+            
         return {"message": "File d'attente Celery réinitialisée avec succès"}
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,

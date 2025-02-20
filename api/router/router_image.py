@@ -122,9 +122,9 @@ def create_image(
         description="Liste des coordonnées y (en %) pour chaque texte. Exemple : [10, 50]"
     ),
     text_font: list[Optional[str]] = Query(
-        ["Arial", "Times New Roman"],
+        ["arial", "tnr"],
         alias="text_font",
-        description="Liste des polices pour chaque texte. Exemple : ['Arial', 'Times New Roman']"
+        description="Liste des polices pour chaque texte. Exemple : ['arial', 'tnr']"
     ),
     text_color: list[Optional[str]] = Query(
         ["000000", "FF0000"],
