@@ -102,6 +102,8 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
     try:
         logger = logging.getLogger(__name__)
         logger.info("=== DÉBUT DU PROCESSUS ===")
+
+        logger.info(f"path du ftp :{result_file}")
         
         # Log détaillé des paramètres
         logger.info(f"Paramètres images: xs={xs}, ys={ys}, ws={ws}, rs={rs}, cs={cs}")
