@@ -34,3 +34,21 @@ image_crop_bottom -> Valeur à mettre pour ne pas rognage : 0
   - Erreur d'accès à PIL.Image.resize
   - Tests de rendu de texte échoués (qualité, multiline, DPI)
 - Mise à jour des dépendances dans le container de test
+
+22/02/2024
+- Amélioration majeure de la gestion des polices :
+  - Correction des chemins des polices dans le conteneur Docker (/app/fonts/)
+  - Mise en place d'un système de polices de secours en cascade :
+    * Tentative de chargement de la police demandée
+    * Si échec, tentative de chargement d'Arial comme police de secours
+    * En dernier recours, utilisation de la police système avec mise à l'échelle
+  - Amélioration du rendu avec la police par défaut :
+    * Ajout d'un facteur d'échelle pour respecter la taille demandée
+    * Support du texte multiligne avec espacement proportionnel
+    * Gestion correcte des alignements (gauche, centre, droite)
+  - Ajout de logs détaillés pour le chargement des polices
+  - Ajout de tests unitaires complets :
+    * Test du système de polices de secours
+    * Test de la mise à l'échelle avec la police par défaut
+    * Test du support multiligne
+    * Test des alignements de texte
