@@ -71,7 +71,7 @@ def process_intercalaire(result_file: str, background_color: str, width: int, he
         )
         raise e
 
-def ensure_ftp_path(ftp, path):
+def ensure_ftp_path(ftp, path, create_dirs=False):
     """Assure que le chemin existe sur le serveur FTP."""
     if not path:
         return
@@ -87,11 +87,12 @@ def ensure_ftp_path(ftp, path):
             try:
                 ftp.cwd(directory)
             except:
-                try:
-                    ftp.mkd(directory)
-                    ftp.cwd(directory)
-                except:
-                    pass
+                if create_dirs:
+                    try:
+                        ftp.mkd(directory)
+                        ftp.cwd(directory)
+                    except:
+                        pass
 
 def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, dpi, params, watermark_text):
     """
@@ -225,15 +226,24 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
 
         # Sauvegarder et uploader le fichier
         if result_file:
-            logger.info("Upload du fichier final")
+            logger.info(f"Début de l'upload du fichier final: {result_file}")
             with BytesIO() as bio:
+                logger.debug("Sauvegarde de l'image en mémoire")
                 current_template.save(bio, format='JPEG', dpi=(dpi, dpi))
                 bio.seek(0)
                 
-                with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-                    directory_path, filename = os.path.split(result_file)
-                    ensure_ftp_path(ftp, directory_path)
-                    ftp.storbinary(f'STOR {result_file}', bio)
+                try:
+                    logger.info("Tentative de connexion FTP")
+                    with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+                        directory_path, filename = os.path.split(result_file)
+                        logger.info(f"Chemin du dossier: {directory_path}, Nom du fichier: {filename}")
+                        ensure_ftp_path(ftp, directory_path, create_dirs=True)
+                        logger.info(f"Tentative d'upload du fichier: {result_file}")
+                        ftp.storbinary(f'STOR {result_file}', bio)
+                        logger.info("Upload terminé avec succès")
+                except Exception as e:
+                    logger.error(f"Erreur lors de l'upload FTP: {type(e).__name__}: {str(e)}")
+                    raise
 
     except Exception as e:
         log_message = f"Erreur générale : {str(e)}"

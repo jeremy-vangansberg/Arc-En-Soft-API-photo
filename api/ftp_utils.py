@@ -85,10 +85,13 @@ def write_logs_to_ftp(logs: List[LogEntry], ftp_host: str, ftp_username: str, ft
     if not logs:
         return
 
+    logger.info(f"Tentative d'écriture des logs dans le dossier: {log_folder}")
+    
     # Créer un seul fichier pour tous les logs
     tz = pytz.timezone('Europe/Paris')
     now = datetime.now(tz)
     log_filename = f"batch_log_{now.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    logger.info(f"Nom du fichier de log: {log_filename}")
     
     with BytesIO() as bio:
         # Écrire tous les logs dans le buffer
@@ -103,12 +106,21 @@ def write_logs_to_ftp(logs: List[LogEntry], ftp_host: str, ftp_username: str, ft
         
         bio.seek(0)
         
-        # Upload en une seule connexion FTP
-        with FTP(ftp_host, ftp_username, ftp_password) as ftp:
-            ftp.cwd('/')
-            if log_folder != '/':
-                ensure_ftp_path(ftp, log_folder)
-            ftp.storbinary(f'STOR {os.path.join(log_folder, log_filename)}', bio)
+        try:
+            # Upload en une seule connexion FTP
+            with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+                logger.info("Connexion FTP établie pour les logs")
+                ftp.cwd('/')
+                if log_folder != '/':
+                    logger.info(f"Navigation vers le dossier de logs: {log_folder}")
+                    ensure_ftp_path(ftp, log_folder, create_dirs=False)
+                full_path = os.path.join(log_folder, log_filename)
+                logger.info(f"Tentative d'upload du fichier de log: {full_path}")
+                ftp.storbinary(f'STOR {full_path}', bio)
+                logger.info("Upload des logs terminé avec succès")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'upload des logs: {type(e).__name__}: {str(e)}")
+            raise
 
 def ftp_security(ftp__id):
     """
@@ -151,31 +163,63 @@ def ftp_security(ftp__id):
         raise
 
 
-def ensure_ftp_path(ftp, path):
+def ensure_ftp_path(ftp, path, create_dirs=False):
     """
     Navigue vers le chemin spécifié sur le serveur FTP.
     Le chemin peut être absolu ou relatif.
-    Les dossiers doivent exister au préalable.
+    Args:
+        ftp: Instance FTP
+        path: Chemin à naviguer
+        create_dirs: Si True, crée les dossiers s'ils n'existent pas. Par défaut False.
     """
-    # Gestion des chemins absolus et relatifs
+    logger.info(f"Tentative de navigation FTP vers: {path} (create_dirs={create_dirs})")
+    
+    if not path:
+        logger.debug("Chemin vide, retour immédiat")
+        return
+        
+    try:
+        current_dir = ftp.pwd()
+        logger.info(f"Répertoire FTP actuel: {current_dir}")
+    except Exception as e:
+        logger.error(f"Impossible d'obtenir le répertoire courant: {str(e)}")
+        
     if path.startswith('/'):
-        # Pour un chemin absolu, on commence par la racine
+        logger.debug("Chemin absolu détecté, retour à la racine")
         ftp.cwd('/')
-        # On retire le premier slash pour le split
         path = path[1:]
     
-    # Navigation dans l'arborescence
     directories = path.split('/')
+    logger.info(f"Navigation dans l'arborescence: {directories}")
+    
     for directory in directories:
-        if directory:  # Ignore les chaînes vides
+        if directory:
             try:
+                logger.debug(f"Tentative d'accès au dossier: {directory}")
                 ftp.cwd(directory)
-                logger.debug(f"Navigated to: {directory}")
+                logger.info(f"Navigation réussie vers: {directory}")
             except Exception as e:
-                logger.error(f"Failed to navigate to directory {directory}: {str(e)}")
-                raise
+                if create_dirs:
+                    try:
+                        logger.info(f"Dossier {directory} non trouvé, tentative de création")
+                        ftp.mkd(directory)
+                        ftp.cwd(directory)
+                        logger.info(f"Dossier {directory} créé et accédé avec succès")
+                    except Exception as e:
+                        logger.error(f"Échec de la création du dossier {directory}: {str(e)}")
+                        logger.error(f"Détails de l'erreur: {type(e).__name__}: {str(e)}")
+                        raise
+                else:
+                    logger.error(f"Le dossier {directory} n'existe pas et create_dirs est False")
+                    logger.error(f"Détails de l'erreur: {type(e).__name__}: {str(e)}")
+                    raise
+    
+    try:
+        final_dir = ftp.pwd()
+        logger.info(f"Navigation terminée. Répertoire final: {final_dir}")
+    except Exception as e:
+        logger.error(f"Impossible d'obtenir le répertoire final: {str(e)}")
 
-                
 def log_request_to_ftp(params: dict, ftp_host: str, ftp_username: str, ftp_password: str, log_folder: str = "/logs"):
     """Version optimisée utilisant le buffer de logs."""
     log_buffer = LogBuffer()
