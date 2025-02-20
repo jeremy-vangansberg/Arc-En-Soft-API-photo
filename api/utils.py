@@ -71,28 +71,46 @@ def process_intercalaire(result_file: str, background_color: str, width: int, he
         )
         raise e
 
-def ensure_ftp_path(ftp, path, create_dirs=False):
+def ensure_ftp_path(ftp, path, create_dirs=True):
     """Assure que le chemin existe sur le serveur FTP."""
+    logger = logging.getLogger(__name__)
+    
     if not path:
+        logger.debug("Chemin vide, pas de navigation nécessaire")
         return
         
     # Gestion des chemins absolus et relatifs
     if path.startswith('/'):
+        logger.info("Chemin absolu détecté, retour à la racine")
         ftp.cwd('/')
         path = path[1:]
     
     # Navigation dans l'arborescence
+    current_path = []
     for directory in path.split('/'):
         if directory:
+            current_path.append(directory)
             try:
+                logger.info(f"Tentative d'accès au dossier: {directory}")
                 ftp.cwd(directory)
-            except:
+                logger.info(f"Navigation réussie vers: {directory}")
+            except Exception as e:
                 if create_dirs:
                     try:
+                        logger.info(f"Dossier {directory} non trouvé, tentative de création")
                         ftp.mkd(directory)
+                        logger.info(f"Dossier {directory} créé avec succès")
                         ftp.cwd(directory)
-                    except:
-                        pass
+                        logger.info(f"Navigation vers le nouveau dossier {directory} réussie")
+                    except Exception as create_error:
+                        logger.error(f"Erreur lors de la création du dossier {directory}: {str(create_error)}")
+                        if hasattr(create_error, 'args'):
+                            logger.error(f"Détails de l'erreur: {create_error.args}")
+                        raise
+                else:
+                    logger.error(f"Le dossier {directory} n'existe pas et create_dirs est False")
+                    logger.error(f"Chemin complet tenté: /{'/'.join(current_path)}")
+                    raise
 
 def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, rs, ws, cs, dhs, dbs, ts, tfs, tcs, tts, txs, tys, ftp_host, ftp_username, ftp_password, dpi, params, watermark_text):
     """
