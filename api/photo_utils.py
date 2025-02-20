@@ -84,7 +84,7 @@ def apply_watermark(
 
 def apply_resize_template(result_img: Image.Image, new_width: int) -> Image.Image:
     """
-    Redimensionne une image en conservant ses proportions.
+    Redimensionne une image en préservant la qualité maximale.
     
     Args:
         result_img (Image.Image): L'image à redimensionner
@@ -93,26 +93,33 @@ def apply_resize_template(result_img: Image.Image, new_width: int) -> Image.Imag
     Returns:
         Image.Image: L'image redimensionnée
     """
+    # Si l'image est déjà à la bonne taille, la retourner telle quelle
+    if result_img.width == new_width:
+        return result_img
+
     width, height = result_img.size
     aspect_ratio = width / height
     new_height = int(new_width / aspect_ratio)
-    resized_img = result_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-    return resized_img
+
+    # Pour une réduction de taille
+    if new_width < width:
+        # Utiliser BOX pour un meilleur rendu lors de la réduction
+        return result_img.resize((new_width, new_height), Image.Resampling.BOX)
+    else:
+        # Pour un agrandissement, utiliser BICUBIC sans filtrage
+        return result_img.resize((new_width, new_height), Image.Resampling.BICUBIC, reducing_gap=None)
 
 
 
 def apply_cartoon_filter(pil_img: Image.Image) -> Image.Image:
     """
-    Applique un filtre cartoon à une image PIL.
+    Applique un filtre cartoon à une image PIL avec un minimum de traitement.
     
     Args:
         pil_img (Image.Image): L'image PIL à transformer
         
     Returns:
         Image.Image: L'image avec le filtre cartoon appliqué
-        
-    Raises:
-        ValueError: Si l'image n'est pas au format RGB
     """
     print(f"Type de l'image reçue : {type(pil_img)}")
     
@@ -124,11 +131,17 @@ def apply_cartoon_filter(pil_img: Image.Image) -> Image.Image:
     else:
         raise ValueError("L'image d'entrée n'est pas au format RGB.")
 
+    # Réduction du flou médian pour préserver plus de détails
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.medianBlur(gray, 5)
+    gray = cv2.medianBlur(gray, 3)  # Réduit de 5 à 3 pour moins de flou
+    
+    # Ajustement des paramètres pour moins de distorsion
     edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                  cv2.THRESH_BINARY, 9, 7)
-    color = cv2.bilateralFilter(img, 9, 300, 300)
+                                cv2.THRESH_BINARY, 7, 5)  # Réduit de 9 à 7
+                                
+    # Réduction de l'intensité du filtre bilatéral
+    color = cv2.bilateralFilter(img, 5, 200, 200)  # Réduit de 9 à 5
+    
     cartoon = cv2.bitwise_and(color, color, mask=edges)
     cartoon_rgb = cv2.cvtColor(cartoon, cv2.COLOR_BGR2RGB)
     print("Filtre cartoon appliqué avec succès.")
@@ -145,20 +158,42 @@ def load_image(image_url: Union[str, List[str]], is_template: bool = False) -> U
         
     Returns:
         Union[Image.Image, List[Image.Image]]: Une image ou une liste d'images PIL
+        
+    Raises:
+        ValueError: Si l'URL est invalide ou si l'image ne peut pas être chargée
     """
+    logger = logging.getLogger(__name__)
+    
     if isinstance(image_url, list) and not is_template:
         return [load_image(url, is_template=True) for url in image_url]
     
     if isinstance(image_url, list):
         image_url = image_url[0]
     
-    response = requests.get(image_url)
-    img = Image.open(BytesIO(response.content))
-    return img
+    try:
+        logger.info(f"Tentative de chargement de l'image: {image_url}")
+        response = requests.get(image_url, timeout=30)  # Timeout après 30 secondes
+        response.raise_for_status()  # Lève une exception si le status n'est pas 2xx
+        
+        img = Image.open(BytesIO(response.content))
+        logger.info(f"Image chargée avec succès. Dimensions: {img.size}")
+        return img
+        
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout lors du chargement de l'image: {image_url}")
+        raise ValueError(f"Le chargement de l'image a pris trop de temps: {image_url}")
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erreur lors du chargement de l'image {image_url}: {str(e)}")
+        raise ValueError(f"Impossible de charger l'image depuis l'URL: {image_url}. Erreur: {str(e)}")
+        
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors du chargement de l'image {image_url}: {str(e)}")
+        raise ValueError(f"Erreur lors du traitement de l'image: {str(e)}")
 
 def apply_rotation(img: Image.Image, rotation: int) -> Image.Image:
     """
-    Applique une rotation à une image.
+    Applique une rotation à une image en préservant la qualité.
     
     Args:
         img (Image.Image): L'image à faire pivoter
@@ -167,12 +202,21 @@ def apply_rotation(img: Image.Image, rotation: int) -> Image.Image:
     Returns:
         Image.Image: L'image pivotée
     """
-    print(f'rotation {rotation} appliquée')
-    return img.rotate(rotation, expand=True, fillcolor=None)
+    if rotation == 0:
+        return img
+    
+    # Pour les rotations de 90, 180, 270 degrés, utiliser une rotation sans interpolation
+    if rotation in [90, 180, 270]:
+        return img.rotate(rotation, expand=True, fillcolor=None, resample=Image.Resampling.NEAREST)
+    
+    # Pour les autres angles, utiliser une rotation de meilleure qualité
+    # mais toujours avec un minimum de traitement
+    return img.rotate(rotation, expand=True, fillcolor=None, resample=Image.Resampling.BICUBIC)
 
 def apply_crop(img: Image.Image, dh: float, db: float) -> Image.Image:
     """
     Rogne une image en haut et en bas selon des pourcentages.
+    Cette fonction est déjà optimale car elle ne fait pas de transformation de pixels.
     
     Args:
         img (Image.Image): L'image à rogner
@@ -182,14 +226,18 @@ def apply_crop(img: Image.Image, dh: float, db: float) -> Image.Image:
     Returns:
         Image.Image: L'image rognée
     """
+    if dh == 0 and db == 0:
+        return img
+        
     width, height = img.size
-    top = (dh / 100) * height
-    bottom = height - ((db / 100) * height)
+    top = int((dh / 100) * height)
+    bottom = int(height - ((db / 100) * height))
     return img.crop((0, top, width, bottom))
 
 def apply_filter(img: Image.Image, _filter: str) -> Image.Image:
     """
     Applique un filtre spécifique à une image PIL.
+    Minimise les transformations pour préserver la qualité.
     
     Args:
         img (Image.Image): L'image à filtrer
@@ -197,17 +245,13 @@ def apply_filter(img: Image.Image, _filter: str) -> Image.Image:
         
     Returns:
         Image.Image: L'image avec le filtre appliqué
-        
-    Notes:
-        - 'nb' : Convertit l'image en niveaux de gris
-        - 'cartoon' : Applique un effet cartoon
-        - autre valeur : Retourne l'image sans modification
     """
     print(f"Filtre demandé : {_filter}, Type de l'image : {type(img)}")
 
     match _filter:
         case 'nb':
-            return ImageOps.grayscale(img)
+            # Conversion directe en niveaux de gris sans post-traitement
+            return img.convert('L')
         case 'cartoon':
             return apply_cartoon_filter(img)
         case _:
@@ -286,8 +330,11 @@ class TextRenderer:
         return draw.textsize(text, font=self.font)
 
     def _render_basic(self, img: Image.Image) -> Image.Image:
-        """Rendu basique du texte."""
-        draw = ImageDraw.Draw(img)
+        """Rendu basique du texte avec qualité optimisée."""
+        # Créer une image temporaire avec canal alpha
+        text_overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(text_overlay)
+        
         width, height = img.size
         x = (self.config.x / 100) * width
         y = (self.config.y / 100) * height
@@ -295,64 +342,77 @@ class TextRenderer:
         lines = self.config.text.split("<br>")
         line_height = self.config.font_size + 5
         
-        # Si nous utilisons la police par défaut, ajuster la position pour la mise à l'échelle
+        # Si nous utilisons la police par défaut, ajuster la position
         if hasattr(self, 'scale_factor'):
             line_height = int(line_height * self.scale_factor)
         
         for i, line in enumerate(lines):
-            # Position de base pour le texte
             pos_x, pos_y = x, y + i * line_height
             
-            # Si nous utilisons la police par défaut, créer une image temporaire plus grande
             if hasattr(self, 'scale_factor'):
-                # Créer une image temporaire pour le texte
-                text_img = Image.new('RGBA', (width, height), (255, 255, 255, 0))
-                temp_draw = ImageDraw.Draw(text_img)
-                temp_draw.text((pos_x, pos_y), line, font=self.font, fill="#" + self.config.color, align=self.config.align)
+                # Pour la police par défaut, créer une image plus grande
+                large_overlay = Image.new('RGBA', 
+                    (int(width * self.scale_factor), int(height * self.scale_factor)), 
+                    (255, 255, 255, 0))
+                temp_draw = ImageDraw.Draw(large_overlay)
                 
-                # Redimensionner le texte selon le facteur d'échelle
-                scaled_text = text_img.resize(
-                    (int(width * self.scale_factor), int(height * self.scale_factor)),
-                    Image.Resampling.LANCZOS
+                # Dessiner le texte à haute résolution
+                scaled_x = pos_x * self.scale_factor
+                scaled_y = pos_y * self.scale_factor
+                temp_draw.text(
+                    (scaled_x, scaled_y), 
+                    line, 
+                    font=self.font, 
+                    fill="#" + self.config.color, 
+                    align=self.config.align,
+                    antialias=True
                 )
                 
-                # Redimensionner à la taille originale
-                final_text = scaled_text.resize((width, height), Image.Resampling.LANCZOS)
-                
-                # Fusionner avec l'image principale
-                img = Image.alpha_composite(img.convert('RGBA'), final_text)
+                # Redimensionner avec BOX pour un meilleur rendu
+                resized_text = large_overlay.resize(img.size, Image.Resampling.BOX)
+                text_overlay = Image.alpha_composite(text_overlay, resized_text)
             else:
-                # Rendu normal pour les polices TrueType
-                draw.text((pos_x, pos_y), line, font=self.font, fill="#" + self.config.color, align=self.config.align)
+                # Pour les polices TrueType, utiliser le rendu antialiasé natif
+                draw.text(
+                    (pos_x, pos_y), 
+                    line, 
+                    font=self.font, 
+                    fill="#" + self.config.color, 
+                    align=self.config.align,
+                    antialias=True
+                )
         
-        return img.convert('RGB') if img.mode == 'RGBA' else img
+        # Fusionner le texte avec l'image d'origine
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+        result = Image.alpha_composite(img, text_overlay)
+        
+        return result.convert('RGB') if img.mode == 'RGBA' else result
 
     def _render_high_res(self, img: Image.Image) -> Image.Image:
-        """Rendu haute résolution avec downscaling."""
-        # Calculer le scale_factor en fonction du DPI
-        base_dpi = 72  # DPI de base pour les polices
-        scale_factor = max(1, self.config.dpi / base_dpi)
+        """Rendu haute résolution avec downscaling optimisé."""
+        # Augmenter la résolution de travail
+        scale_factor = 4  # Facteur fixe pour une meilleure qualité
         
-        # Créer une image temporaire plus grande
-        temp_img = img.copy().resize(
-            (int(img.width * scale_factor), int(img.height * scale_factor)),
-            Image.Resampling.LANCZOS
-        )
+        # Créer une image temporaire haute résolution
+        temp_img = Image.new('RGBA', 
+            (img.width * scale_factor, img.height * scale_factor),
+            (255, 255, 255, 0))
         
-        # Ajuster la taille de la police pour la plus grande image
+        # Ajuster la taille de la police pour la haute résolution
         original_size = self.config.font_size
         self.config.font_size = int(original_size * scale_factor)
         self._prepare_font()
         
-        # Rendre le texte sur l'image plus grande
+        # Rendre le texte en haute résolution
         temp_img = self._render_basic(temp_img)
         
         # Restaurer la taille de police originale
         self.config.font_size = original_size
         self._prepare_font()
         
-        # Redimensionner à la taille originale avec antialiasing de haute qualité
-        return temp_img.resize(img.size, Image.Resampling.LANCZOS)
+        # Redimensionner avec BOX pour un meilleur rendu
+        return temp_img.resize(img.size, Image.Resampling.BOX)
 
     def _render_outlined(self, img: Image.Image) -> Image.Image:
         """Rendu avec contour."""
@@ -439,53 +499,42 @@ def add_text(
     y: float = 10, 
     color: str = "FFFFFF",
     align: Optional[str] = "left",
-    strategy: TextRenderStrategy = TextRenderStrategy.COMBINED,
+    strategy: TextRenderStrategy = TextRenderStrategy.BASIC,
     dpi: int = 300
 ) -> Image.Image:
     """
-    Ajoute du texte sur une image avec une qualité améliorée.
-    
-    Args:
-        img (Image.Image): L'image sur laquelle ajouter le texte
-        text (str): Le texte à ajouter (supporte les sauts de ligne avec <br>)
-        font_name (str): Nom de la police (arial, tnr, helvetica, verdana, avenir, roboto)
-        font_size (int): Taille de la police en points
-        x (float): Position horizontale en pourcentage (0-100)
-        y (float): Position verticale en pourcentage (0-100)
-        color (str): Couleur du texte en format hexadécimal sans #
-        align (str, optional): Alignement du texte (left, center, right)
-        strategy (TextRenderStrategy): Stratégie de rendu du texte
-        dpi (int): Résolution en DPI pour le calcul de la taille de police
-        
-    Returns:
-        Image.Image: L'image avec le texte ajouté
-        
-    Raises:
-        ValueError: Si les paramètres sont invalides
+    Ajoute du texte sur une image.
     """
-    if not isinstance(img, Image.Image):
-        raise ValueError("L'argument img doit être une instance de PIL.Image.Image")
-        
-    if not (0 <= x <= 100) or not (0 <= y <= 100):
-        raise ValueError("Les positions x et y doivent être comprises entre 0 et 100")
-        
-    if not (1 <= font_size <= 1000):
-        raise ValueError("La taille de la police doit être comprise entre 1 et 1000")
-        
-    if not len(color) == 6 or not all(c in '0123456789ABCDEFabcdef' for c in color):
-        raise ValueError("La couleur doit être au format hexadécimal valide (6 caractères)")
+    # Créer une copie de l'image
+    result = img.copy()
+    draw = ImageDraw.Draw(result)
     
-    config = TextConfig(
-        text=text,
-        font_name=font_name,
-        font_size=font_size,  # Utiliser la taille de police telle quelle
-        x=x,
-        y=y,
-        color=color,
-        align=align,
-        strategy=strategy,
-        dpi=dpi
-    )
+    # Charger la police
+    try:
+        font = ImageFont.truetype(f"/app/fonts/{font_name}.ttf", font_size)
+    except:
+        try:
+            font = ImageFont.truetype("/app/fonts/arial.ttf", font_size)
+        except:
+            font = ImageFont.load_default()
     
-    renderer = TextRenderer(config)
-    return renderer.render(img.copy())
+    # Calculer les positions en pixels
+    width, height = img.size
+    pos_x = (x / 100) * width
+    pos_y = (y / 100) * height
+    
+    # Gérer le texte multiligne
+    lines = text.split("<br>")
+    line_height = font_size + 5
+    
+    # Dessiner chaque ligne
+    for i, line in enumerate(lines):
+        draw.text(
+            (pos_x, pos_y + i * line_height),
+            line,
+            font=font,
+            fill="#" + color,
+            align=align
+        )
+    
+    return result

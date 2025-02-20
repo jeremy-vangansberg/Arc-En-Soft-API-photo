@@ -116,32 +116,42 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
     """
     Télécharge les données, applique les transformations et charge l'image sur un serveur.
     """
-    log_request_to_ftp(params, ftp_host, ftp_username, ftp_password)
+    logger = logging.getLogger(__name__)
+    logger.info("=== DÉBUT DU PROCESSUS ===")
 
     try:
-        logger = logging.getLogger(__name__)
-        logger.info("=== DÉBUT DU PROCESSUS ===")
-
-        logger.info(f"path du ftp :{result_file}")
-        
-        # Log détaillé des paramètres
+        # Log des paramètres
+        logger.info(f"path du ftp: {result_file}")
+        logger.info(f"URL du template: {template_url}")
+        logger.info(f"URLs des images: {image_url}")
         logger.info(f"Paramètres images: xs={xs}, ys={ys}, ws={ws}, rs={rs}, cs={cs}")
         logger.info(f"Paramètres texte: texts={ts}, fonts={tfs}, colors={tcs}, sizes={tts}, positions_x={txs}, positions_y={tys}")
-        if result_w:
-            logger.info(f"Largeur finale demandée: {result_w}px")
         
-        # Charger le template et les images
-        template = load_image(template_url, is_template=True)
-        logger.debug(f"Template chargé, dimensions: {template.size}")
+        # Charger le template
+        try:
+            template = load_image(template_url, is_template=True)
+            logger.info(f"Template chargé avec succès. Dimensions: {template.size}")
+        except ValueError as e:
+            logger.error(f"Erreur lors du chargement du template: {str(e)}")
+            raise ValueError(f"Impossible de charger le template. Erreur: {str(e)}")
         
-        images = load_image(image_url)
-        if not isinstance(images, list):
-            images = [images]
-        logger.debug(f"Images source chargées, nombre: {len(images)}")
+        # Charger les images
+        try:
+            # S'assurer que image_url est une liste
+            if not isinstance(image_url, list):
+                image_url = [image_url]
+            images = load_image(image_url)
+            logger.info(f"Images source chargées avec succès. Nombre: {len(images)}")
+        except ValueError as e:
+            logger.error(f"Erreur lors du chargement des images: {str(e)}")
+            raise ValueError(f"Impossible de charger une ou plusieurs images. Erreur: {str(e)}")
 
-        # Calculer le facteur d'échelle basé sur result_w
-        # Si result_w n'est pas spécifié, utiliser la largeur actuelle du template
-        reference_width = 1000  # Largeur de référence
+        # Vérifier que nous avons le bon nombre d'images
+        if len(images) != len(xs):
+            raise ValueError(f"Le nombre d'images ({len(images)}) ne correspond pas au nombre de positions ({len(xs)})")
+
+        # Calculer le facteur d'échelle
+        reference_width = 1000
         target_width = result_w if result_w else template.width
         scale_factor = target_width / reference_width
         logger.info(f"Facteur d'échelle calculé: {scale_factor} (target_width={target_width}, reference_width={reference_width})")
@@ -298,10 +308,10 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                     raise
 
     except Exception as e:
-        log_message = f"Erreur générale : {str(e)}"
-        logger.error(log_message)
-        log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
-        raise e
+        error_message = f"Erreur lors du traitement de l'image: {str(e)}"
+        logger.error(error_message)
+        log_to_ftp(ftp_host, ftp_username, ftp_password, error_message, log_folder="/error_logs")
+        raise
 
     finally:
         if result_file and os.path.exists(result_file):
