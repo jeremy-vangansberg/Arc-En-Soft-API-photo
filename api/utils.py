@@ -235,14 +235,48 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 try:
                     logger.info("Tentative de connexion FTP")
                     with FTP(ftp_host, ftp_username, ftp_password) as ftp:
+                        # Log du répertoire initial
+                        initial_dir = ftp.pwd()
+                        logger.info(f"Répertoire FTP initial: {initial_dir}")
+                        
                         directory_path, filename = os.path.split(result_file)
                         logger.info(f"Chemin du dossier: {directory_path}, Nom du fichier: {filename}")
+                        
+                        # D'abord naviguer vers le bon dossier
+                        logger.info(f"Navigation vers le dossier: {directory_path}")
                         ensure_ftp_path(ftp, directory_path, create_dirs=True)
-                        logger.info(f"Tentative d'upload du fichier: {result_file}")
-                        ftp.storbinary(f'STOR {result_file}', bio)
+                        
+                        # Vérifier le répertoire courant après navigation
+                        current_dir = ftp.pwd()
+                        logger.info(f"Répertoire FTP après navigation: {current_dir}")
+                        
+                        # Liste des fichiers dans le répertoire courant
+                        try:
+                            files = ftp.nlst()
+                            logger.info(f"Fichiers dans le répertoire courant: {files}")
+                        except Exception as e:
+                            logger.warning(f"Impossible de lister les fichiers: {str(e)}")
+                        
+                        # Puis uploader le fichier en utilisant uniquement le nom du fichier
+                        logger.info(f"Tentative d'upload du fichier: {filename} dans le dossier actuel: {current_dir}")
+                        ftp.storbinary(f'STOR {filename}', bio)
+                        
+                        # Vérifier que le fichier a bien été créé
+                        try:
+                            new_files = ftp.nlst()
+                            if filename in new_files:
+                                logger.info(f"Fichier {filename} trouvé après upload")
+                            else:
+                                logger.warning(f"Fichier {filename} non trouvé après upload. Fichiers présents: {new_files}")
+                        except Exception as e:
+                            logger.warning(f"Impossible de vérifier la présence du fichier: {str(e)}")
+                        
                         logger.info("Upload terminé avec succès")
                 except Exception as e:
                     logger.error(f"Erreur lors de l'upload FTP: {type(e).__name__}: {str(e)}")
+                    # Log des détails supplémentaires de l'erreur si disponibles
+                    if hasattr(e, 'args'):
+                        logger.error(f"Détails de l'erreur: {e.args}")
                     raise
 
     except Exception as e:
