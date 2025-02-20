@@ -492,7 +492,7 @@ class TextRenderer:
 
 def add_text(
     img: Image.Image,
-    text: str = "Sample Text", 
+    text: Optional[str] = None,  # Changé de "Sample Text" à None
     font_name: str = "arial",
     font_size: int = 20, 
     x: float = 10, 
@@ -504,7 +504,12 @@ def add_text(
 ) -> Image.Image:
     """
     Ajoute du texte sur une image.
+    Si aucun texte n'est spécifié, retourne l'image inchangée.
     """
+    # Si pas de texte, retourner l'image inchangée
+    if text is None:
+        return img
+
     # Créer une copie de l'image
     result = img.copy()
     draw = ImageDraw.Draw(result)
