@@ -215,22 +215,26 @@ def process_and_upload(template_url, image_url, result_file, result_w, xs, ys, r
                 log_to_ftp(ftp_host, ftp_username, ftp_password, log_message, log_folder="/error_logs")
                 raise e
 
-        # Ajouter du texte en dernier
-        if ts:
+        # Traitement des paramètres de texte
+        if ts and len(ts) > 0:
             logger.info(f"Ajout de {len(ts)} textes")
             for i in range(len(ts)):
                 try:
-                    text = get_value_with_default(ts, i, "")
-                    font_name = get_value_with_default(tfs, i, "arial")
-                    color = get_value_with_default(tcs, i, "000000")
-                    font_size = get_value_with_default(tts, i, 20)
-                    tx = get_value_with_default(txs, i, 0)
-                    ty = get_value_with_default(tys, i, 0)
+                    # Vérifier que tous les paramètres nécessaires sont disponibles
+                    if (i < len(ts) and i < len(tfs) and i < len(tcs) and 
+                        i < len(tts) and i < len(txs) and i < len(tys)):
+                        
+                        text = ts[i]
+                        font_name = tfs[i]
+                        color = tcs[i]
+                        font_size = tts[i]
+                        tx = txs[i]
+                        ty = tys[i]
 
-                    if text:
                         # Ajuster la taille de la police en fonction de la taille finale
                         adjusted_font_size = int(font_size * scale_factor)
                         logger.info(f"Texte {i+1}: '{text}', police={font_name}, taille={font_size}->{adjusted_font_size}, position=({tx}%, {ty}%)")
+                        
                         current_template = add_text(
                             img=current_template,
                             text=text,

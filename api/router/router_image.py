@@ -107,32 +107,32 @@ def create_image(
         description="Largeur en pixels de l'image finale, avec conservation du ratio. Exemple : 800."
     ),
     text: list[str] = Query(
-        ["Bonjour", "Monde"],
+        None,
         alias="text",
         description="Liste des textes à ajouter. Exemple : ['Bonjour', 'Monde']"
     ),
     text_x: list[int] = Query(
-        [20, 60],
+        None,
         alias="text_x",
         description="Liste des coordonnées x (en %) pour chaque texte. Exemple : [10, 50]"
     ),
     text_y: list[int] = Query(
-        [70, 70],
+        None,
         alias="text_y",
         description="Liste des coordonnées y (en %) pour chaque texte. Exemple : [10, 50]"
     ),
     text_font: list[Optional[str]] = Query(
-        ["arial", "tnr"],
+        None,
         alias="text_font",
         description="Liste des polices pour chaque texte. Exemple : ['arial', 'tnr']"
     ),
     text_color: list[Optional[str]] = Query(
-        ["000000", "FF0000"],
+        None,
         alias="text_color",
         description="Liste des couleurs (format hex) sans #. Exemple : ['000000', 'FF0000']"
     ),
     text_size: list[Optional[int]] = Query(
-        [24, 36],
+        None,
         alias="text_size",
         description="Liste des tailles des textes en points. Exemple : [10, 15]"
     ),
