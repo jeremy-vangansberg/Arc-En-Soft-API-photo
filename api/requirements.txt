@@ -6,3 +6,4 @@ celery[redis]==5.4.0
 pytz==2024.1
 opencv-python-headless
 numpy
+redis==5.0.1
