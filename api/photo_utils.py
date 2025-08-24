@@ -176,6 +176,10 @@ def load_image(image_url: Union[str, List[str]], is_template: bool = False) -> U
         response.raise_for_status()  # Lève une exception si le status n'est pas 2xx
         
         img = Image.open(BytesIO(response.content))
+        
+        # Corriger l'orientation automatiquement selon les métadonnées EXIF
+        img = ImageOps.exif_transpose(img)
+        
         logger.info(f"Image chargée avec succès. Dimensions: {img.size}")
         return img
         
