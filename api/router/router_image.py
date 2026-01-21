@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, Request, HTTPException
 from typing import Optional
 from celery_worker import celery_app
 
-from ftp_utils import ftp_security
+from ftp_utils import decrypt_ftp_password
 from descriptions import description_create_image
 from enum import Enum
 import logging
@@ -36,9 +36,9 @@ class FilterType(str, Enum):
 @router.get("/create_image/", description=description_create_image)
 def create_image(
     request: Request,
-    ftp_id: Optional[int] = Query(1,
-        description="ID du serveur FTP de destination."
-    ),
+    ftp_host: str = Query(..., description="Hôte du serveur FTP"),
+    ftp_username: str = Query(..., description="Nom d'utilisateur FTP"),
+    ftp_password: str = Query(..., description="Mot de passe FTP chiffré en AES-ECB-256 (Hex)"),
     template_url: str = Query(
         'https://edit.org/img/blog/ate-preschool-yearbook-templates-free-editable.webp',
         alias="template_url",
@@ -251,8 +251,8 @@ def create_image(
         "text_y": tys_clean
     }
 
-    logger.info(f"Fetching FTP credentials for FTP ID: {ftp_id}.")
-    FTP_HOST, FTP_URSERNAME, FTP_PASSWORD = ftp_security(ftp_id)
+    logger.info("Decrypting FTP password.")
+    decrypted_password = decrypt_ftp_password(ftp_password)
 
     logger.info("Sending task to Celery worker.")
 
@@ -277,9 +277,9 @@ def create_image(
             tts_clean,
             txs_clean,
             tys_clean,
-            FTP_HOST, 
-            FTP_URSERNAME, 
-            FTP_PASSWORD,
+            ftp_host,
+            ftp_username,
+            decrypted_password,
             dpi,
             params,
             watermark_text

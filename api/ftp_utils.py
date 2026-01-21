@@ -12,6 +12,7 @@ import json
 from dataclasses import dataclass
 from time import time
 from io import BytesIO
+from Crypto.Cipher import AES
 
 # Configuration du logger
 logger = logging.getLogger(__name__)
@@ -21,6 +22,26 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+
+def decrypt_ftp_password(encrypted_password: str) -> str:
+    """
+    Déchiffre un mot de passe FTP chiffré en AES-ECB-256.
+    Le mot de passe chiffré est attendu en format Hex.
+    """
+    secret_key = os.getenv("AES_SECRET_KEY")
+    if not secret_key:
+        raise ValueError("AES_SECRET_KEY non configurée")
+
+    key = bytes.fromhex(secret_key)
+    encrypted_data = bytes.fromhex(encrypted_password)
+
+    cipher = AES.new(key, AES.MODE_ECB)
+    decrypted_data = cipher.decrypt(encrypted_data)
+
+    padding_len = decrypted_data[-1]
+    return decrypted_data[:-padding_len].decode('utf-8')
+
 
 @dataclass
 class LogEntry:
@@ -121,47 +142,6 @@ def write_logs_to_ftp(logs: List[LogEntry], ftp_host: str, ftp_username: str, ft
         except Exception as e:
             logger.error(f"Erreur lors de l'upload des logs: {type(e).__name__}: {str(e)}")
             raise
-
-def ftp_security(ftp__id):
-    """
-    Récupère les informations de sécurité FTP pour un identifiant donné.
-
-    Args:
-        ftp__id (int): Identifiant FTP (1 pour le moment).
-
-    Returns:
-        tuple: FTP_HOST, FTP_USERNAME, FTP_PASSWORD
-    """
-    logger.info(f"Fetching FTP credentials for FTP ID: {ftp__id}")
-    
-    try:
-        if ftp__id == 1:
-            FTP_HOST = os.getenv("FTP_HOST_1")
-            FTP_USERNAME = os.getenv("FTP_USERNAME_1")
-            FTP_PASSWORD = os.getenv("FTP_PASSWORD_1")
-            
-            # Vérification des variables d'environnement
-            if not FTP_HOST:
-                logger.error("FTP_HOST_1 environment variable is missing!")
-                raise ValueError("Missing environment variable: FTP_HOST_1")
-            if not FTP_USERNAME:
-                logger.error("FTP_USERNAME_1 environment variable is missing!")
-                raise ValueError("Missing environment variable: FTP_USERNAME_1")
-            if not FTP_PASSWORD:
-                logger.error("FTP_PASSWORD_1 environment variable is missing!")
-                raise ValueError("Missing environment variable: FTP_PASSWORD_1")
-
-            logger.info("FTP credentials successfully retrieved (host and username).")
-            return FTP_HOST, FTP_USERNAME, FTP_PASSWORD
-        
-        else:
-            logger.error(f"Unsupported FTP ID: {ftp__id}")
-            raise ValueError(f"FTP ID {ftp__id} is not supported.")
-    
-    except Exception as e:
-        logger.exception(f"Error while fetching FTP credentials: {e}")
-        raise
-
 
 def ensure_ftp_path(ftp, path, create_dirs=False):
     """
